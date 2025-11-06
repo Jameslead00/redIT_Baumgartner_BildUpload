@@ -22,7 +22,7 @@
     },
     "scripts": {
         "start": "react-scripts start",
-        "build": "react-scripts build",
+        "build": "react-scripts build && workbox generateSW workbox-config.js",
         "build:package": "cd ../../../ && npm run build:all --workspace=lib/msal-react",
         "test:e2e": "jest",
         "eject": "react-scripts eject",
@@ -51,7 +51,9 @@
         "react-scripts": "^5.0.1",
         "rollup": "^4.52.5",
         "shx": "^0.4.0",
-        "ts-jest": "^29.1.0"
+        "ts-jest": "^29.1.0",
+        "workbox-cli": "^7.3.0",
+        "workbox-webpack-plugin": "^7.3.0"
     },
     "jest-junit": {
         "suiteNameTemplate": "TypeScript Sample Tests",
