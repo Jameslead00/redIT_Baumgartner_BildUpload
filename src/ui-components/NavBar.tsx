@@ -30,14 +30,7 @@ const NavBar = () => {
             <AppBar position="static">
                 <Toolbar>
                     <Typography style={{ flexGrow: 1 }}>
-                        <Link
-                            component={RouterLink}
-                            to="/"
-                            color="inherit"
-                            variant="h6"
-                        >
-                            Baumgartner Fenster
-                        </Link>
+                        Baumgartner Fenster
                     </Typography>
                     <WelcomeName />
                     <Box sx={{ mx: 1 }}>

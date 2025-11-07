@@ -23,6 +23,7 @@ interface ImageUploadProps {
     onUploadSuccess: (urls: string[], files?: File[]) => void;  // Zweites Argument optional hinzufügen
     onCustomTextChange: (text: string) => void;
     customText: string;
+    onSaveOffline?: (files: File[]) => void;  // Neue Prop für Offline-Speicherung
 }
 
 interface FileData {
@@ -46,7 +47,7 @@ const dataURLToBlob = (dataURL: string): Blob => {
 };
 
 // Hilfsfunktionen außerhalb der Komponente definieren
-const checkFolderExists = async (accessToken: string, siteId: string): Promise<boolean> => {
+export const checkFolderExists = async (accessToken: string, siteId: string): Promise<boolean> => {
     const folderPath = "Shared Documents/Bilder";
     
     const checkResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${folderPath}`, {
@@ -56,7 +57,7 @@ const checkFolderExists = async (accessToken: string, siteId: string): Promise<b
     return checkResponse.ok;
 };
 
-const createFolder = async (accessToken: string, siteId: string): Promise<void> => {
+export const createFolder = async (accessToken: string, siteId: string): Promise<void> => {
     const createResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/Shared Documents:/children`, {
         method: "POST",
         headers: {
@@ -75,7 +76,7 @@ const createFolder = async (accessToken: string, siteId: string): Promise<void> 
     }
 };
 
-const uploadLargeFile = async (accessToken: string, siteId: string, file: File): Promise<string> => {
+export const uploadLargeFile = async (accessToken: string, siteId: string, file: File): Promise<string> => {
     const filePath = `Shared Documents/Bilder/${file.name}`;
     
     // Erstelle Upload-Session
@@ -126,7 +127,7 @@ const uploadLargeFile = async (accessToken: string, siteId: string, file: File):
     return finalData.webUrl;
 };
 
-const uploadSmallFile = async (accessToken: string, siteId: string, file: File): Promise<string> => {
+export const uploadSmallFile = async (accessToken: string, siteId: string, file: File): Promise<string> => {
     const uploadResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/Shared Documents/Bilder/${file.name}:/content`, {
         method: "PUT",
         headers: {
@@ -149,7 +150,7 @@ const uploadSmallFile = async (accessToken: string, siteId: string, file: File):
     return urlData.webUrl;
 };
 
-const ImageUpload: React.FC<ImageUploadProps> = ({ team, channel, onUploadSuccess, onCustomTextChange, customText }) => {
+const ImageUpload: React.FC<ImageUploadProps> = ({ team, channel, onUploadSuccess, onCustomTextChange, customText, onSaveOffline }) => {
     const { instance, accounts } = useMsal();
     const account = useAccount(accounts[0] || {});
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);  // Ändere zu File[]
@@ -237,12 +238,15 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ team, channel, onUploadSucces
     };
 
     const handleUpload = async () => {
-        if (isOnline) {
-            // Normale Upload-Logik, z. B. zu OneDrive, dann onUploadSuccess(urls)
+        if (isOnline && account) {
+            await uploadImages();  // Online-Upload
         } else {
-            // Offline: Speichere Dateien lokal (keine URLs)
-            const urls: string[] = [];  // Leere URLs für Offline
-            onUploadSuccess(urls, selectedFiles);  // Übergebe Dateien zusätzlich
+            // Offline: Speichere lokal
+            if (onSaveOffline) {
+                onSaveOffline(selectedFiles);
+            }
+            setSuccess(`${selectedFiles.length} image(s) saved offline!`);
+            setSelectedFiles([]);
         }
     };
 
@@ -322,26 +326,27 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ team, channel, onUploadSucces
                     </Grid>
                 </Box>
             )}
-            <Button
-                variant="contained"
-                color="secondary"
-                onClick={uploadImages}
-                disabled={!selectedFiles.length || uploading}
-                fullWidth
-                sx={{ mb: 2 }}
-            >
-                {uploading ? "Uploading..." : "Datei(en) hochladen"}
-            </Button>
-            {success && (
+            {/* TextField immer anzeigen, wenn Dateien ausgewählt */}
+            {selectedFiles.length > 0 && (
                 <TextField
                     fullWidth
-                    label="Nachricht zum Beitrag hinzufügen (optional)"
+                    label="Nachricht zum Beitrag hinzufügen"
                     value={customText}
                     onChange={(e) => onCustomTextChange(e.target.value)}
                     variant="outlined"
                     sx={{ mb: 2 }}
                 />
             )}
+            <Button
+                variant="contained"
+                color="secondary"
+                onClick={handleUpload}
+                disabled={!selectedFiles.length || uploading || (!isOnline && !customText.trim())}  // Deaktiviere, wenn offline und keine Nachricht
+                fullWidth
+                sx={{ mb: 2 }}
+            >
+                {uploading ? "Uploading..." : (isOnline ? "Datei(en) hochladen" : "Offline speichern")}
+            </Button>
             {error && <Alert severity="error" sx={{ mt: 2 }}>Error: {error}</Alert>}
             {success && <Alert severity="success" sx={{ mt: 2 }}>{success}</Alert>}
         </Paper>

@@ -5,7 +5,7 @@ export const msalConfig: Configuration = {
     auth: {
         clientId: "d260df73-58a1-48d2-8dc5-5890dd909b52", //added clientId from Baumgartner Tenant
         authority: "https://login.microsoftonline.com/c46f4107-49a4-46ce-9c24-a793d9c1b61b", //url with Baumgartner Teannt ID
-        redirectUri: "https://improved-space-doodle-wr7rpx4qj79rfgxv-3000.app.github.dev/", //"https://jameslead00.github.io/redIT_Baumgartner_BildUpload/"
+        redirectUri: /*"https://improved-space-doodle-wr7rpx4qj79rfgxv-3000.app.github.dev/",*/ "https://jameslead00.github.io/redIT_Baumgartner_BildUpload/",
         postLogoutRedirectUri: "/",
     },
     system: {

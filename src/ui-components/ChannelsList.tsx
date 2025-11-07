@@ -3,8 +3,7 @@ import { useMsal, useAccount } from "@azure/msal-react";
 import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import { loginRequest } from "../authConfig";
 import ImageUpload from "./ImageUpload";
-import { Grid, Card, CardContent, CardActionArea, Typography, Box, Alert } from "@mui/material";
-import { Folder as FolderIcon } from "@mui/icons-material";
+import { Grid, Card, CardActionArea, CardContent, Typography, Box } from "@mui/material";
 
 interface Team {
     id: string;
@@ -14,52 +13,70 @@ interface Team {
 interface Channel {
     id: string;
     displayName: string;
-    teamId?: string;
 }
 
 interface ChannelsListProps {
     team: Team;
-    onChannelSelect: (channel: Channel) => void;
-    onUploadSuccess: (urls: string[]) => void;
+    onChannelSelect: (channel: Channel | null) => void;
+    onUploadSuccess: (urls: string[], files?: File[]) => void;
     onCustomTextChange: (text: string) => void;
     customText: string;
     isFavorite: boolean;
+    cachedChannels?: Channel[];  // Neue Prop für gecachte Kanäle
+    onSaveOffline?: (files: File[]) => void;  // Füge onSaveOffline Prop hinzu
 }
 
-const ChannelsList: React.FC<ChannelsListProps> = ({ team, onChannelSelect, onUploadSuccess, onCustomTextChange, customText, isFavorite }) => {
+const ChannelsList: React.FC<ChannelsListProps> = ({
+    team,
+    onChannelSelect,
+    onUploadSuccess,
+    onCustomTextChange,
+    customText,
+    isFavorite,
+    cachedChannels = [],  // Default leer
+    onSaveOffline
+}) => {
     const { instance, accounts } = useMsal();
     const account = useAccount(accounts[0] || {});
     const [channels, setChannels] = useState<Channel[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
+    const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+    // Online-Status überwachen
+    useEffect(() => {
+        const handleOnline = () => setIsOnline(true);
+        const handleOffline = () => setIsOnline(false);
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, []);
 
     useEffect(() => {
         const fetchChannels = async () => {
-            if (!account) return;
+            if (!account || !isOnline) {
+                setChannels(cachedChannels);  // Verwende gecachte Kanäle, wenn offline oder nicht eingeloggt
+                setLoading(false);
+                return;
+            }
 
-            const request = {
-                ...loginRequest,
-                account: account,
-            };
+            const request = { ...loginRequest, account };
 
             try {
                 const response = await instance.acquireTokenSilent(request);
                 const accessToken = response.accessToken;
 
                 const graphResponse = await fetch(`https://graph.microsoft.com/v1.0/teams/${team.id}/channels`, {
-                    headers: {
-                        Authorization: `Bearer ${accessToken}`,
-                    },
+                    headers: { Authorization: `Bearer ${accessToken}` },
                 });
 
                 if (graphResponse.ok) {
                     const data = await graphResponse.json();
                     setChannels(data.value);
-                    // Automatisch den einzigen Kanal auswählen, wenn es nur einen gibt
-                    if (data.value.length === 1) {
-                        handleChannelSelect(data.value[0]);
-                    }
                 } else {
                     setError("Failed to fetch channels");
                 }
@@ -68,16 +85,8 @@ const ChannelsList: React.FC<ChannelsListProps> = ({ team, onChannelSelect, onUp
                     instance.acquireTokenPopup(request).then((response) => {
                         const accessToken = response.accessToken;
                         fetch(`https://graph.microsoft.com/v1.0/teams/${team.id}/channels`, {
-                            headers: {
-                                Authorization: `Bearer ${accessToken}`,
-                            },
-                        }).then((res) => res.json()).then((data) => {
-                            setChannels(data.value);
-                            // Automatisch den einzigen Kanal auswählen, wenn es nur einen gibt
-                            if (data.value.length === 1) {
-                                handleChannelSelect(data.value[0]);
-                            }
-                        });
+                            headers: { Authorization: `Bearer ${accessToken}` },
+                        }).then((res) => res.json()).then((data) => setChannels(data.value));
                     });
                 } else {
                     setError("Error fetching channels");
@@ -88,20 +97,20 @@ const ChannelsList: React.FC<ChannelsListProps> = ({ team, onChannelSelect, onUp
         };
 
         fetchChannels();
-    }, [instance, account, team.id, isFavorite]);
+    }, [instance, account, team.id, isOnline, cachedChannels]);
 
     const handleChannelSelect = (channel: Channel) => {
         setSelectedChannel(channel);
         onChannelSelect(channel);
     };
 
-    if (loading) return <Typography variant="h6">Loading channels...</Typography>;
-    if (error) return <Alert severity="error">Error: {error}</Alert>;
+    if (loading && account && isOnline) return <Typography variant="h6">Loading channels...</Typography>;  // Nur laden, wenn account und online
+    if (error) return <Typography variant="h6" color="error">Error: {error}</Typography>;
 
     return (
-        <Box sx={{ mt: 2 }}>
+        <Box sx={{ mt: 3 }}>
             <Typography variant="h6" gutterBottom>
-                Kanal auswählen
+                Kanal auswählen ({isOnline && account ? 'Online' : 'Offline gecacht'})
             </Typography>
             <Grid container spacing={2}>
                 {channels.map((channel) => (
@@ -109,13 +118,13 @@ const ChannelsList: React.FC<ChannelsListProps> = ({ team, onChannelSelect, onUp
                         <Card
                             sx={{
                                 cursor: 'pointer',
-                                border: selectedChannel?.id === channel.id ? '2px solid #1976d2' : '1px solid #e0e0e0',
-                                '&:hover': { boxShadow: 3 }
+                                border: selectedChannel?.id === channel.id ? '2px solid #007aff' : '1px solid #ddd',
+                                transition: 'all 0.3s ease'
                             }}
                             onClick={() => handleChannelSelect(channel)}
                         >
                             <CardActionArea>
-                                <CardContent sx={{ display: 'flex', alignItems: 'center', p: 2 }}>
+                                <CardContent>
                                     <Box>
                                         <Typography variant="subtitle1" component="div">
                                             {channel.displayName}
@@ -134,6 +143,7 @@ const ChannelsList: React.FC<ChannelsListProps> = ({ team, onChannelSelect, onUp
                     onUploadSuccess={onUploadSuccess}
                     onCustomTextChange={onCustomTextChange}
                     customText={customText}
+                    onSaveOffline={onSaveOffline}  // Übergebe onSaveOffline
                 />
             )}
         </Box>

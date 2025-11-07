@@ -7,6 +7,7 @@ import { postMessageToChannel } from "./PostMessage";
 import { Autocomplete, TextField, Button, Typography, Box, Alert, IconButton } from "@mui/material";
 import { Star, StarBorder } from "@mui/icons-material";
 import { db, OfflineDB, FavoriteTeam, OfflinePost, Team, Channel } from '../db';
+import { checkFolderExists, createFolder, uploadLargeFile, uploadSmallFile } from './ImageUpload';
 
 const TeamsList: React.FC = () => {
     const { instance, accounts } = useMsal();
@@ -37,6 +38,17 @@ const TeamsList: React.FC = () => {
         };
     }, []);
 
+     // Sortiere Teams: Favoriten zuerst
+    const sortedTeams = useMemo(() => {
+        return [...teams].sort((a, b) => {
+            const aFav = favorites.has(a.id);
+            const bFav = favorites.has(b.id);
+            if (aFav && !bFav) return -1;
+            if (!aFav && bFav) return 1;
+            return a.displayName.localeCompare(b.displayName);
+        });
+    }, [teams, favorites]);
+
     // Lade gecachte Favoriten und Offline-Posts
     useEffect(() => {
         const loadCachedData = async () => {
@@ -55,7 +67,10 @@ const TeamsList: React.FC = () => {
 
     useEffect(() => {
         const fetchTeams = async () => {
-            if (!account || !isOnline) return;  // Nur online laden
+            if (!account || !isOnline) {
+                setLoading(false);  // Setze loading auf false, wenn kein account oder offline
+                return;
+            }
 
             const request = { ...loginRequest, account };
 
@@ -90,7 +105,36 @@ const TeamsList: React.FC = () => {
         };
 
         fetchTeams();
-    }, [instance, account, favorites, isOnline]);
+        // Entferne loadAndCacheChannelsForFavorites aus useEffect, um Loop zu vermeiden
+    }, [instance, account, isOnline]);  // Entferne favorites aus dependencies, um Loop zu vermeiden
+
+    // Neuer useEffect für Kanäle-Caching, nur wenn nötig
+    useEffect(() => {
+        const loadAndCacheChannelsForFavorites = async () => {
+            if (!account || !isOnline || favorites.size === 0) return;
+            const request = { ...loginRequest, account };
+            const response = await instance.acquireTokenSilent(request);
+            const accessToken = response.accessToken;
+
+            for (const favId of favorites) {
+                const team = teams.find(t => t.id === favId) || cachedFavorites.find(f => f.id === favId);
+                if (team && !cachedFavorites.find(f => f.id === favId)?.channels) {  // Nur laden, wenn nicht bereits gecached
+                    try {
+                        const channelsResponse = await fetch(`https://graph.microsoft.com/v1.0/teams/${favId}/channels`, {
+                            headers: { Authorization: `Bearer ${accessToken}` },
+                        });
+                        const channelsData = await channelsResponse.json();
+                        await db.favoriteTeams.put({ id: favId, displayName: team.displayName, channels: channelsData.value });
+                        setCachedFavorites(prev => prev.map(f => f.id === favId ? { ...f, channels: channelsData.value } : f));
+                    } catch (err) {
+                        console.error(`Fehler beim Laden von Kanälen für ${favId}:`, err);
+                    }
+                }
+            }
+        };
+
+        loadAndCacheChannelsForFavorites();
+    }, [favorites, account, isOnline, teams]);  // Füge teams hinzu, aber vermeide Loop durch Bedingung
 
     const toggleFavorite = async (teamId: string) => {
         const newFavorites = new Set(favorites);
@@ -126,37 +170,96 @@ const TeamsList: React.FC = () => {
         setImageUrls([]);
     };
 
+    // Kombiniere online Teams mit gecachten Favoriten für Offline
+    const availableTeams = useMemo(() => {
+        if (isOnline && teams.length > 0) return sortedTeams;
+        return cachedFavorites.map(fav => ({ id: fav.id, displayName: fav.displayName }));  // Offline: Nur gecachte
+    }, [isOnline, teams, sortedTeams, cachedFavorites]);
+
     const saveOfflinePost = async (files?: File[]) => {
-        if (!selectedTeam || !selectedChannel) return;
+        if (!selectedTeam || !selectedChannel || !customText.trim()) return;
         const post = {
             teamId: selectedTeam.id,
             channelId: selectedChannel.id,
             text: customText,
-            imageUrls,
+            imageUrls: [] as string[],
             timestamp: Date.now()
         };
-        await db.posts.add(post);
-        setOfflinePosts([...offlinePosts, post]);
+        const postId = await db.posts.add(post);
+        console.log('Offline Post gespeichert:', postId, post);
+        // Speichere Dateien
+        if (files && files.length > 0) {
+            console.log('Speichere Bilder:', files.length);
+            for (const file of files) {
+                await db.images.add({ postId, file });
+                console.log('Bild gespeichert:', file.name);
+            }
+        } else {
+            console.log('Keine Bilder zum Speichern');
+        }
+        setOfflinePosts([...offlinePosts, { ...post, id: postId }]);
         alert('Offline gespeichert!');
+        // Reset alles
         setCustomText('');
         setImageUrls([]);
+        setSelectedChannel(null);
+        setSelectedTeam(null);
+        setUploadSuccess(false);
     };
 
     const syncOfflinePosts = async () => {
         if (!account || !isOnline || offlinePosts.length === 0) return;
+        setPosting(true);
+        console.log('Starte Sync für', offlinePosts.length, 'Posts');
         for (const post of offlinePosts) {
             try {
+                console.log('Sync Post:', post.id);
                 const request = { ...loginRequest, account };
                 const response = await instance.acquireTokenSilent(request);
                 const accessToken = response.accessToken;
-                await postMessageToChannel(accessToken, post.teamId, post.channelId, post.text, post.imageUrls);
+
+                // Bilder hochladen
+                const images = await db.images.where('postId').equals(post.id).toArray();
+                console.log('Gefundene Bilder für Post', post.id, ':', images.length);
+                const uploadedUrls: string[] = [];
+                for (const img of images) {
+                    console.log('Lade Bild hoch:', img.file.name);
+                    // Site-ID holen
+                    const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/groups/${post.teamId}/sites/root`, {
+                        headers: { Authorization: `Bearer ${accessToken}` },
+                    });
+                    const siteData = await siteResponse.json();
+                    const siteId = siteData.id;
+                    console.log('Site ID:', siteId);
+
+                    // Ordner prüfen/erstellen
+                    const folderExists = await checkFolderExists(accessToken, siteId);
+                    if (!folderExists) await createFolder(accessToken, siteId);
+
+                    // Hochladen
+                    let url: string;
+                    if (img.file.size > 4 * 1024 * 1024) {
+                        url = await uploadLargeFile(accessToken, siteId, img.file);
+                    } else {
+                        url = await uploadSmallFile(accessToken, siteId, img.file);
+                    }
+                    console.log('Hochgeladene URL:', url);
+                    uploadedUrls.push(url);
+                }
+
+                console.log('Poste Nachricht mit URLs:', uploadedUrls);
+                // Posten
+                await postMessageToChannel(accessToken, post.teamId, post.channelId, post.text, uploadedUrls);
                 await db.posts.delete(post.id);
+                await db.images.where('postId').equals(post.id).delete();
+                console.log('Post synced und gelöscht');
             } catch (err) {
-                console.error('Sync-Fehler:', err);
+                console.error('Sync-Fehler für Post', post.id, ':', err);
             }
         }
         setOfflinePosts([]);
-        alert('Offline-Posts synchronisiert!');
+        setPosting(false);
+        alert('Alle cached Posts hochgeladen!');
     };
 
     const handlePostToChannel = async () => {
@@ -183,18 +286,9 @@ const TeamsList: React.FC = () => {
         }
     };
 
-    // Sortiere Teams: Favoriten zuerst
-    const sortedTeams = useMemo(() => {
-        return [...teams].sort((a, b) => {
-            const aFav = favorites.has(a.id);
-            const bFav = favorites.has(b.id);
-            if (aFav && !bFav) return -1;
-            if (!aFav && bFav) return 1;
-            return a.displayName.localeCompare(b.displayName);
-        });
-    }, [teams, favorites]);
+   
 
-    if (loading) return <Typography variant="h6">Loading teams...</Typography>;
+    if (loading && account && isOnline) return <Typography variant="h6">Loading teams...</Typography>;  // Nur laden, wenn account und online
     if (error) return <Alert severity="error">Error: {error}</Alert>;
 
     return (
@@ -207,10 +301,10 @@ const TeamsList: React.FC = () => {
             )}
 
             <Typography variant="h5" gutterBottom>
-                Team auswählen
+                Team auswählen ({isOnline && account ? 'Online' : 'Offline gecacht'})
             </Typography>
             <Autocomplete
-                options={sortedTeams}
+                options={availableTeams}  // Zeigt gecachte Teams, wenn nicht eingeloggt
                 getOptionLabel={(option) => option.displayName}
                 value={selectedTeam}
                 onChange={handleTeamSelect}
@@ -232,31 +326,29 @@ const TeamsList: React.FC = () => {
                     onUploadSuccess={(urls: string[], files?: File[]) => {
                         setImageUrls(urls);
                         setUploadSuccess(true);
-                        // Für Offline: Speichere files, wenn vorhanden
-                        if (files && !isOnline) {
-                            saveOfflinePost(files);
-                        }
                     }}
                     onCustomTextChange={setCustomText}
                     customText={customText}
                     isFavorite={favorites.has(selectedTeam.id)}
+                    cachedChannels={cachedFavorites.find(f => f.id === selectedTeam.id)?.channels || []}
+                    onSaveOffline={saveOfflinePost}  // Übergebe saveOfflinePost
                 />
             )}
-            {uploadSuccess && customText.trim() && (
+            {uploadSuccess && customText.trim() && isOnline && account && (
                 <Button
                     variant="contained"
                     color="primary"
-                    onClick={isOnline && account ? handlePostToChannel : () => saveOfflinePost()}  // Wrappe saveOfflinePost in eine Funktion
+                    onClick={handlePostToChannel}
                     disabled={posting}
                     sx={{ mt: 2 }}
                 >
-                    {posting ? "Posting..." : (isOnline && account ? "Beitrag in Kanal posten" : "Offline speichern")}
+                    {posting ? "Posting..." : "Beitrag in Kanal posten"}
                 </Button>
             )}
-            {/* Sync-Button */}
-            {isOnline && account && offlinePosts.length > 0 && (
-                <Button onClick={syncOfflinePosts} variant="contained" sx={{ mt: 2 }}>
-                    Offline-Posts synchronisieren ({offlinePosts.length})
+            {/* Sync-Button immer anzeigen, wenn Posts vorhanden und online/account */}
+            {offlinePosts.length > 0 && isOnline && account && (
+                <Button onClick={syncOfflinePosts} variant="contained" sx={{ mt: 2 }} disabled={posting}>
+                    Upload ({offlinePosts.length}) cached post(s)
                 </Button>
             )}
         </Box>
