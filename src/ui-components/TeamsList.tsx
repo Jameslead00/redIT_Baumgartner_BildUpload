@@ -7,7 +7,7 @@ import { postMessageToChannel } from "./PostMessage";
 import { Autocomplete, TextField, Button, Typography, Box, Alert, IconButton } from "@mui/material";
 import { Star, StarBorder } from "@mui/icons-material";
 import { db, OfflineDB, FavoriteTeam, OfflinePost, Team, Channel } from '../db';
-import { checkFolderExists, createFolder, uploadLargeFile, uploadSmallFile } from './ImageUpload';
+import { checkFolderExists, createFolder, uploadLargeFile, uploadSmallFile, encodeFilesToBase64, getFolderPath } from './ImageUpload';
 
 const TeamsList: React.FC = () => {
     const { instance, accounts } = useMsal();
@@ -25,6 +25,7 @@ const TeamsList: React.FC = () => {
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [offlinePosts, setOfflinePosts] = useState<any[]>([]);
     const [cachedFavorites, setCachedFavorites] = useState<any[]>([]);
+    const [base64Images, setBase64Images] = useState<string[]>([]);  // Neue State für base64 Bilder
 
     // Online-Status überwachen
     useEffect(() => {
@@ -181,6 +182,7 @@ const TeamsList: React.FC = () => {
         const post = {
             teamId: selectedTeam.id,
             channelId: selectedChannel.id,
+            channelDisplayName: selectedChannel.displayName,  // Neu hinzufügen
             text: customText,
             imageUrls: [] as string[],
             timestamp: Date.now()
@@ -218,30 +220,38 @@ const TeamsList: React.FC = () => {
                 const response = await instance.acquireTokenSilent(request);
                 const accessToken = response.accessToken;
 
-                // Bilder hochladen
+                // Bilder aus Dexie laden
                 const images = await db.images.where('postId').equals(post.id).toArray();
-                console.log('Gefundene Bilder für Post', post.id, ':', images.length);
+                const files = images.map(img => img.file);
+
+                // Erzeuge base64Images für Thumbnails
+                const base64Images = await encodeFilesToBase64(files);
+
+                // Ordner und Site-ID prüfen
+                const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/groups/${post.teamId}/sites/root`, {
+                    headers: { Authorization: `Bearer ${accessToken}` },
+                });
+                const siteData = await siteResponse.json();
+                const siteId = siteData.id;
+                console.log('Site ID:', siteId);
+
+                // Bestimme den Ordner-Pfad
+                const folderPath = getFolderPath(post.channelDisplayName);
+                console.log('Verwende Ordner-Pfad:', folderPath);
+
+                // Ordner prüfen/erstellen
+                const folderExists = await checkFolderExists(accessToken, siteId, folderPath);
+                if (!folderExists) await createFolder(accessToken, siteId, folderPath);
+
+                // Hochladen
                 const uploadedUrls: string[] = [];
                 for (const img of images) {
                     console.log('Lade Bild hoch:', img.file.name);
-                    // Site-ID holen
-                    const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/groups/${post.teamId}/sites/root`, {
-                        headers: { Authorization: `Bearer ${accessToken}` },
-                    });
-                    const siteData = await siteResponse.json();
-                    const siteId = siteData.id;
-                    console.log('Site ID:', siteId);
-
-                    // Ordner prüfen/erstellen
-                    const folderExists = await checkFolderExists(accessToken, siteId);
-                    if (!folderExists) await createFolder(accessToken, siteId);
-
-                    // Hochladen
                     let url: string;
                     if (img.file.size > 4 * 1024 * 1024) {
-                        url = await uploadLargeFile(accessToken, siteId, img.file);
+                        url = await uploadLargeFile(accessToken, siteId, img.file, folderPath);
                     } else {
-                        url = await uploadSmallFile(accessToken, siteId, img.file);
+                        url = await uploadSmallFile(accessToken, siteId, img.file, folderPath);
                     }
                     console.log('Hochgeladene URL:', url);
                     uploadedUrls.push(url);
@@ -249,7 +259,7 @@ const TeamsList: React.FC = () => {
 
                 console.log('Poste Nachricht mit URLs:', uploadedUrls);
                 // Posten
-                await postMessageToChannel(accessToken, post.teamId, post.channelId, post.text, uploadedUrls);
+                await postMessageToChannel(accessToken, post.teamId, post.channelId, post.text, uploadedUrls, base64Images);
                 await db.posts.delete(post.id);
                 await db.images.where('postId').equals(post.id).delete();
                 console.log('Post synced und gelöscht');
@@ -273,7 +283,7 @@ const TeamsList: React.FC = () => {
             const response = await instance.acquireTokenSilent(request);
             const accessToken = response.accessToken;
 
-            await postMessageToChannel(accessToken, selectedTeam.id, selectedChannel.id, customText, imageUrls);
+            await postMessageToChannel(accessToken, selectedTeam.id, selectedChannel!.id, customText, imageUrls, base64Images);  // base64Images übergeben
 
             alert("Beitrag erfolgreich in den Kanal gepostet!");
             setUploadSuccess(false);
@@ -323,9 +333,11 @@ const TeamsList: React.FC = () => {
                 <ChannelsList
                     team={selectedTeam}
                     onChannelSelect={setSelectedChannel}
-                    onUploadSuccess={(urls: string[], files?: File[]) => {
+                    onUploadSuccess={(urls: string[], files?: File[], base64Images?: string[]) => {
                         setImageUrls(urls);
                         setUploadSuccess(true);
+                        // base64Images speichern oder übergeben
+                        setBase64Images(base64Images || []);  // Neue State hinzufügen
                     }}
                     onCustomTextChange={setCustomText}
                     customText={customText}

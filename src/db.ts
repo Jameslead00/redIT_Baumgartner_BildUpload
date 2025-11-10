@@ -20,6 +20,7 @@ export interface OfflinePost {
     id?: number;
     teamId: string;
     channelId: string;
+    channelDisplayName: string;  // Neu hinzufügen
     text: string;
     imageUrls: string[];
     timestamp: number;

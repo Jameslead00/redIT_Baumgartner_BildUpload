@@ -18,7 +18,7 @@ interface Channel {
 interface ChannelsListProps {
     team: Team;
     onChannelSelect: (channel: Channel | null) => void;
-    onUploadSuccess: (urls: string[], files?: File[]) => void;
+    onUploadSuccess: (urls: string[], files?: File[], base64Images?: string[]) => void;
     onCustomTextChange: (text: string) => void;
     customText: string;
     isFavorite: boolean;
