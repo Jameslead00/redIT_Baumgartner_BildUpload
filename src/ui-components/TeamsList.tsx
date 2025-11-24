@@ -25,7 +25,7 @@ const TeamsList: React.FC = () => {
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [offlinePosts, setOfflinePosts] = useState<any[]>([]);
     const [cachedFavorites, setCachedFavorites] = useState<any[]>([]);
-    const [base64Images, setBase64Images] = useState<string[]>([]);  // Neue State für base64 Bilder
+    const [uploadedFiles, setUploadedFiles] = useState<File[]>([]); // Statt base64Images
 
     // Online-Status überwachen
     useEffect(() => {
@@ -169,6 +169,7 @@ const TeamsList: React.FC = () => {
         setUploadSuccess(false);
         setCustomText("");
         setImageUrls([]);
+        setUploadedFiles([]); // Reset
     };
 
     // Kombiniere online Teams mit gecachten Favoriten für Offline
@@ -191,8 +192,7 @@ const TeamsList: React.FC = () => {
             const images = await db.images.where('postId').equals(post.id).toArray();
             const files = images.map(img => img.file);
 
-            // Erzeuge base64Images für Thumbnails
-            const base64Images = await encodeFilesToBase64(files);
+            // HINWEIS: encodeFilesToBase64 wird nicht mehr benötigt für den Post
 
             // Ordner und Site-ID prüfen
             const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/groups/${post.teamId}/sites/root`, {
@@ -225,8 +225,9 @@ const TeamsList: React.FC = () => {
             }
 
             console.log('Poste Nachricht mit URLs:', uploadedUrls);
-            // Posten
-            await postMessageToChannel(accessToken, post.teamId, post.channelId, post.text, uploadedUrls, base64Images);
+            // Posten - Jetzt mit files statt base64Images
+            await postMessageToChannel(accessToken, post.teamId, post.channelId, post.text, uploadedUrls, files);
+            
             await db.posts.delete(post.id);
             await db.images.where('postId').equals(post.id).delete();
             console.log('Post synced und gelöscht');
@@ -284,8 +285,7 @@ const TeamsList: React.FC = () => {
                 const images = await db.images.where('postId').equals(post.id).toArray();
                 const files = images.map(img => img.file);
 
-                // Erzeuge base64Images für Thumbnails
-                const base64Images = await encodeFilesToBase64(files);
+                // HINWEIS: encodeFilesToBase64 entfernt
 
                 // Ordner und Site-ID prüfen
                 const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/groups/${post.teamId}/sites/root`, {
@@ -318,8 +318,9 @@ const TeamsList: React.FC = () => {
                 }
 
                 console.log('Poste Nachricht mit URLs:', uploadedUrls);
-                // Posten
-                await postMessageToChannel(accessToken, post.teamId, post.channelId, post.text, uploadedUrls, base64Images);
+                // Posten - Jetzt mit files
+                await postMessageToChannel(accessToken, post.teamId, post.channelId, post.text, uploadedUrls, files);
+                
                 await db.posts.delete(post.id);
                 await db.images.where('postId').equals(post.id).delete();
                 console.log('Post synced und gelöscht');
@@ -343,12 +344,14 @@ const TeamsList: React.FC = () => {
             const response = await instance.acquireTokenSilent(request);
             const accessToken = response.accessToken;
 
-            await postMessageToChannel(accessToken, selectedTeam.id, selectedChannel!.id, customText, imageUrls, base64Images);  // base64Images übergeben
+            // Hier uploadedFiles übergeben
+            await postMessageToChannel(accessToken, selectedTeam.id, selectedChannel!.id, customText, imageUrls, uploadedFiles);
 
             alert("Beitrag erfolgreich in den Kanal gepostet!");
             setUploadSuccess(false);
             setCustomText("");
             setImageUrls([]);
+            setUploadedFiles([]);
         } catch (err) {
             alert("Fehler beim Posten: " + (err instanceof Error ? err.message : "Unbekannter Fehler"));
         } finally {
@@ -396,14 +399,14 @@ const TeamsList: React.FC = () => {
                     onUploadSuccess={(urls: string[], files?: File[], base64Images?: string[]) => {
                         setImageUrls(urls);
                         setUploadSuccess(true);
-                        // base64Images speichern oder übergeben
-                        setBase64Images(base64Images || []);  // Neue State hinzufügen
+                        // Files speichern für den Post
+                        setUploadedFiles(files || []);
                     }}
                     onCustomTextChange={setCustomText}
                     customText={customText}
                     isFavorite={favorites.has(selectedTeam.id)}
                     cachedChannels={cachedFavorites.find(f => f.id === selectedTeam.id)?.channels || []}
-                    onSaveOffline={saveOfflinePost}  // Übergebe saveOfflinePost
+                    onSaveOffline={saveOfflinePost}
                 />
             )}
             {uploadSuccess && customText.trim() && isOnline && account && (

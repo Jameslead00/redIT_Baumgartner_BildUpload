@@ -156,7 +156,8 @@ export const uploadSmallFile = async (accessToken: string, siteId: string, file:
 };
 
 // Neue Hilfsfunktion: Bild skalieren und zu base64 encodieren
-const resizeImage = (file: File, maxWidth: number = 200, maxHeight: number = 200, quality: number = 0.8): Promise<string> => {
+// Exportieren, damit andere Komponenten sie nutzen können
+export const resizeImage = (file: File, maxWidth: number = 200, maxHeight: number = 200, quality: number = 0.8): Promise<string> => {
     return new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = () => {
@@ -218,11 +219,11 @@ export const encodeFilesToBase64 = async (files: File[]): Promise<string[]> => {
 const ImageUpload: React.FC<ImageUploadProps> = ({ team, channel, onUploadSuccess, onCustomTextChange, customText, onSaveOffline }) => {
     const { instance, accounts } = useMsal();
     const account = useAccount(accounts[0] || {});
-    const [selectedFiles, setSelectedFiles] = useState<File[]>([]);  // Ändere zu File[]
+    const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [uploading, setUploading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
-    const [thumbnails, setThumbnails] = useState<string[]>([]);  // State für Thumbnails
+    const [thumbnails, setThumbnails] = useState<string[]>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const isOnline = navigator.onLine;  // Oder prop übergeben
 
