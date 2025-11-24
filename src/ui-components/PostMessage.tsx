@@ -1,5 +1,11 @@
 import React from 'react';
 
+// Interface für Benutzer-Erwähnungen
+export interface MentionUser {
+    id: string;
+    displayName: string;
+}
+
 // Füge Interfaces für Adaptive Card-Elemente hinzu
 interface AdaptiveCardElement {
     type: string;
@@ -87,13 +93,28 @@ const prepareImageForHostedContent = (file: File): Promise<string> => {
     });
 };
 
+// Hilfsfunktion für HTML Escaping (WICHTIG für Namen mit Sonderzeichen)
+const escapeHtml = (str: string) => {
+    return str.replace(/[&<>"']/g, (m) => {
+        switch (m) {
+            case '&': return '&amp;';
+            case '<': return '&lt;';
+            case '>': return '&gt;';
+            case '"': return '&quot;';
+            case "'": return '&#39;';
+            default: return m;
+        }
+    });
+};
+
 export const postMessageToChannel = async (
     accessToken: string,
     teamId: string,
     channelId: string,
     customText: string,
     imageUrls: string[],
-    files: File[] // Wir brauchen die echten Dateien statt base64 Thumbnails
+    files: File[],
+    mentions: MentionUser[] = [] 
 ): Promise<void> => {
     
     // 1. Hosted Contents vorbereiten
@@ -106,14 +127,30 @@ export const postMessageToChannel = async (
         };
     }));
 
-    // 2. HTML Body erstellen
-    // Wir verlinken die Bilder zusätzlich mit der OneDrive URL (imageUrls)
+    // 2. Mentions vorbereiten
+    // WICHTIG: Filtere ungültige User ohne ID heraus, um Fehler zu vermeiden
+    const validMentions = mentions.filter(u => u.id && u.displayName);
+
+    const mentionEntities = validMentions.map((user, index) => ({
+        id: index, // ID muss mit dem id im <at> Tag übereinstimmen (Integer im JSON)
+        mentionText: user.displayName, // Plain Text im JSON
+        mentioned: {
+            user: {
+                id: user.id,
+                displayName: user.displayName,
+                userIdentityType: "aadUser"
+            }
+        }
+    }));
+
+    // HTML für Mentions erstellen (z.B. "<at id="0">Max Mustermann</at>")
+    // WICHTIG: escapeHtml nutzen, damit Sonderzeichen das Tag nicht brechen
+    const mentionsHtml = validMentions.map((user, index) => `<at id="${index}">${escapeHtml(user.displayName)}</at>`).join(' ');
+
+    // 3. HTML Body erstellen
     const imagesHtml = hostedContents.map((hc, index) => {
         const id = hc["@microsoft.graph.temporaryId"];
         const oneDriveUrl = imageUrls[index] || "#";
-        
-        // FIX: Im Teams Web Client (Chrome) führt das Umschließen von <img> mit <a> oft dazu,
-        // dass das Bild nicht angezeigt wird. Wir platzieren den Link stattdessen unter dem Bild.
         return `
             <div style="margin-bottom: 16px;">
                 <img src="../hostedContents/${id}/$value" style="max-width: 100%; width: auto; border-radius: 4px; display: block;" alt="Image ${index + 1}">
@@ -125,22 +162,29 @@ export const postMessageToChannel = async (
             </div>`;
     }).join('');
 
+    // Text zusammenbauen: Mentions vor dem eigentlichen Text
+    // Wir nutzen <p> für den Text-Block
+    const textContent = mentionsHtml 
+        ? `<p>${mentionsHtml} ${escapeHtml(customText || "")}</p>` 
+        : `<p style="font-size: 14px; font-weight: bold; margin-bottom: 12px;">${escapeHtml(customText || "New images uploaded!")}</p>`;
+
     const messagePayload = {
         body: {
             contentType: "html",
             content: `
                 <div>
-                    <p style="font-size: 14px; font-weight: bold; margin-bottom: 12px;">${customText || "New images uploaded!"}</p>
+                    ${textContent}
                     <div style="display: flex; flex-direction: column; gap: 10px;">
                         ${imagesHtml}
                     </div>
                 </div>
             `
         },
-        hostedContents: hostedContents
+        hostedContents: hostedContents,
+        mentions: mentionEntities // Mentions zur Payload hinzufügen
     };
 
-    // 3. Senden
+    // 4. Senden
     const messageResponse = await fetch(`https://graph.microsoft.com/v1.0/teams/${teamId}/channels/${channelId}/messages`, {
         method: "POST",
         headers: {

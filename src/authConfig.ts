@@ -5,7 +5,7 @@ export const msalConfig: Configuration = {
     auth: {
         clientId: "d260df73-58a1-48d2-8dc5-5890dd909b52", //added clientId from Baumgartner Tenant
         authority: "https://login.microsoftonline.com/c46f4107-49a4-46ce-9c24-a793d9c1b61b", //url with Baumgartner Tenant ID
-        redirectUri: /*"https://improved-space-doodle-wr7rpx4qj79rfgxv-3000.app.github.dev/",*/ "https://jameslead00.github.io/redIT_Baumgartner_BildUpload/",
+        redirectUri: "https://improved-space-doodle-wr7rpx4qj79rfgxv-3000.app.github.dev/",/* "https://jameslead00.github.io/redIT_Baumgartner_BildUpload/",*/
         postLogoutRedirectUri: "https://jameslead00.github.io/redIT_Baumgartner_BildUpload/",
     },
     system: {
@@ -19,7 +19,7 @@ export const msalConfig: Configuration = {
 
 // Add here scopes for id token to be used at MS Identity Platform endpoints.
 export const loginRequest: PopupRequest = {
-    scopes: ["User.Read", "Team.ReadBasic.All", "Channel.ReadBasic.All", "ChannelMessage.Send", "Files.ReadWrite", "Sites.ReadWrite.All"],
+    scopes: ["User.Read", "Team.ReadBasic.All", "TeamMember.Read.All", "Channel.ReadBasic.All", "ChannelMessage.Send", "Files.ReadWrite", "Sites.ReadWrite.All"],
 };
 
 // Add here the endpoints for MS Graph API services you would like to use.

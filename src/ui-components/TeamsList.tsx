@@ -3,7 +3,7 @@ import { useMsal, useAccount } from "@azure/msal-react";
 import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import { loginRequest } from "../authConfig";
 import ChannelsList from "./ChannelsList";
-import { postMessageToChannel } from "./PostMessage";
+import { postMessageToChannel, MentionUser } from "./PostMessage"; // MentionUser importieren
 import { Autocomplete, TextField, Button, Typography, Box, Alert, IconButton } from "@mui/material";
 import { Star, StarBorder } from "@mui/icons-material";
 import { db, OfflineDB, FavoriteTeam, OfflinePost, Team, Channel } from '../db';
@@ -25,7 +25,11 @@ const TeamsList: React.FC = () => {
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [offlinePosts, setOfflinePosts] = useState<any[]>([]);
     const [cachedFavorites, setCachedFavorites] = useState<any[]>([]);
-    const [uploadedFiles, setUploadedFiles] = useState<File[]>([]); // Statt base64Images
+    const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+    
+    // Neue States für Mentions
+    const [teamMembers, setTeamMembers] = useState<MentionUser[]>([]);
+    const [selectedMentions, setSelectedMentions] = useState<MentionUser[]>([]);
 
     // Online-Status überwachen
     useEffect(() => {
@@ -109,9 +113,9 @@ const TeamsList: React.FC = () => {
         // Entferne loadAndCacheChannelsForFavorites aus useEffect, um Loop zu vermeiden
     }, [instance, account, isOnline]);  // Entferne favorites aus dependencies, um Loop zu vermeiden
 
-    // Neuer useEffect für Kanäle-Caching, nur wenn nötig
+    // Neuer useEffect für Kanäle- UND Mitglieder-Caching, nur wenn nötig
     useEffect(() => {
-        const loadAndCacheChannelsForFavorites = async () => {
+        const loadAndCacheDataForFavorites = async () => {
             if (!account || !isOnline || favorites.size === 0) return;
             const request = { ...loginRequest, account };
             const response = await instance.acquireTokenSilent(request);
@@ -119,23 +123,77 @@ const TeamsList: React.FC = () => {
 
             for (const favId of favorites) {
                 const team = teams.find(t => t.id === favId) || cachedFavorites.find(f => f.id === favId);
-                if (team && !cachedFavorites.find(f => f.id === favId)?.channels) {  // Nur laden, wenn nicht bereits gecached
-                    try {
-                        const channelsResponse = await fetch(`https://graph.microsoft.com/v1.0/teams/${favId}/channels`, {
-                            headers: { Authorization: `Bearer ${accessToken}` },
+                const cachedFav = cachedFavorites.find(f => f.id === favId);
+                
+                if (team) {
+                    let channels = cachedFav?.channels;
+                    let members = cachedFav?.members;
+                    let needsUpdate = false;
+
+                    // 1. Kanäle laden falls fehlen
+                    if (!channels) {
+                        try {
+                            const channelsResponse = await fetch(`https://graph.microsoft.com/v1.0/teams/${favId}/channels`, {
+                                headers: { Authorization: `Bearer ${accessToken}` },
+                            });
+                            if (channelsResponse.ok) {
+                                const channelsData = await channelsResponse.json();
+                                channels = channelsData.value;
+                                needsUpdate = true;
+                            }
+                        } catch (err) {
+                            console.error(`Fehler beim Laden von Kanälen für ${favId}:`, err);
+                        }
+                    }
+
+                    // 2. Mitglieder laden falls fehlen (NEU)
+                    if (!members) {
+                        try {
+                            const membersResponse = await fetch(`https://graph.microsoft.com/v1.0/teams/${favId}/members`, {
+                                headers: { Authorization: `Bearer ${accessToken}` },
+                            });
+                            if (membersResponse.ok) {
+                                const membersData = await membersResponse.json();
+                                members = membersData.value
+                                    .filter((m: any) => m.userId)
+                                    .map((m: any) => ({
+                                        id: m.userId,
+                                        displayName: m.displayName
+                                    }));
+                                needsUpdate = true;
+                            }
+                        } catch (err) {
+                            console.error(`Fehler beim Laden von Mitgliedern für ${favId}:`, err);
+                        }
+                    }
+
+                    // Wenn Daten aktualisiert wurden, in DB speichern
+                    if (needsUpdate && channels) {
+                        const newFavData = { 
+                            id: favId, 
+                            displayName: team.displayName, 
+                            channels: channels,
+                            members: members || [] 
+                        };
+                        await db.favoriteTeams.put(newFavData);
+                        
+                        // State aktualisieren
+                        setCachedFavorites(prev => {
+                            const idx = prev.findIndex(f => f.id === favId);
+                            if (idx >= 0) {
+                                const newArr = [...prev];
+                                newArr[idx] = newFavData;
+                                return newArr;
+                            }
+                            return [...prev, newFavData];
                         });
-                        const channelsData = await channelsResponse.json();
-                        await db.favoriteTeams.put({ id: favId, displayName: team.displayName, channels: channelsData.value });
-                        setCachedFavorites(prev => prev.map(f => f.id === favId ? { ...f, channels: channelsData.value } : f));
-                    } catch (err) {
-                        console.error(`Fehler beim Laden von Kanälen für ${favId}:`, err);
                     }
                 }
             }
         };
 
-        loadAndCacheChannelsForFavorites();
-    }, [favorites, account, isOnline, teams]);  // Füge teams hinzu, aber vermeide Loop durch Bedingung
+        loadAndCacheDataForFavorites();
+    }, [favorites, account, isOnline, teams]); // cachedFavorites aus Deps entfernt um Loop zu vermeiden
 
     const toggleFavorite = async (teamId: string) => {
         const newFavorites = new Set(favorites);
@@ -144,19 +202,42 @@ const TeamsList: React.FC = () => {
             await db.favoriteTeams.delete(teamId);  // Aus Cache entfernen
         } else {
             newFavorites.add(teamId);
-            // Cache Team und Kanäle (nur online)
+            // Cache Team, Kanäle und Mitglieder (nur online)
             if (isOnline && account) {
                 const team = teams.find(t => t.id === teamId);
                 if (team) {
-                    // Kanäle laden und cachen
                     const request = { ...loginRequest, account };
                     const response = await instance.acquireTokenSilent(request);
                     const accessToken = response.accessToken;
+                    
+                    // Kanäle laden
                     const channelsResponse = await fetch(`https://graph.microsoft.com/v1.0/teams/${teamId}/channels`, {
                         headers: { Authorization: `Bearer ${accessToken}` },
                     });
                     const channelsData = await channelsResponse.json();
-                    await db.favoriteTeams.put({ id: teamId, displayName: team.displayName, channels: channelsData.value });
+
+                    // Mitglieder laden (NEU)
+                    let members: MentionUser[] = [];
+                    try {
+                        const membersResponse = await fetch(`https://graph.microsoft.com/v1.0/teams/${teamId}/members`, {
+                            headers: { Authorization: `Bearer ${accessToken}` },
+                        });
+                        if (membersResponse.ok) {
+                            const mData = await membersResponse.json();
+                            members = mData.value.filter((m:any) => m.userId).map((m:any) => ({ id: m.userId, displayName: m.displayName }));
+                        }
+                    } catch (e) { console.error("Failed to fetch members for fav", e); }
+
+                    const favData = { 
+                        id: teamId, 
+                        displayName: team.displayName, 
+                        channels: channelsData.value,
+                        members: members
+                    };
+                    await db.favoriteTeams.put(favData);
+                    
+                    // Cache State sofort aktualisieren
+                    setCachedFavorites(prev => [...prev.filter(f => f.id !== teamId), favData]);
                 }
             }
         }
@@ -164,12 +245,97 @@ const TeamsList: React.FC = () => {
         localStorage.setItem('favoriteTeams', JSON.stringify([...newFavorites]));
     };
 
+    // Mitglieder laden, wenn ein Team ausgewählt wird
+    useEffect(() => {
+        let isMounted = true;
+
+        const fetchMembers = async () => {
+            if (!selectedTeam) {
+                setTeamMembers([]);
+                return;
+            }
+            
+            // 1. Zuerst Cache prüfen (für Offline oder schnelles Laden)
+            // Wir suchen im State 'cachedFavorites', der jetzt korrekt gefüllt sein sollte
+            const cachedTeam = cachedFavorites.find(f => f.id === selectedTeam.id);
+            
+            // Prüfen ob Mitglieder im Cache sind
+            if (cachedTeam?.members && cachedTeam.members.length > 0) {
+                console.log(`Lade Mitglieder aus Cache für ${selectedTeam.displayName} (${cachedTeam.members.length} Mitglieder)`);
+                if (isMounted) setTeamMembers(cachedTeam.members);
+                
+                // Wenn wir offline sind, sind wir hier fertig
+                if (!isOnline) return;
+            } else if (!isOnline) {
+                // Offline und kein Cache -> leer
+                console.warn("Offline und keine Mitglieder im Cache für dieses Team.");
+                if (isMounted) setTeamMembers([]);
+                return;
+            }
+
+            if (!account || !isOnline) return;
+            
+            // 2. Wenn Online, API abfragen (Code bleibt wie vorher...)
+            console.log(`Lade Mitglieder für Team (API): ${selectedTeam.displayName}`);
+
+            const request = { ...loginRequest, account };
+
+            try {
+                let accessToken;
+                try {
+                    const response = await instance.acquireTokenSilent(request);
+                    accessToken = response.accessToken;
+                } catch (err) {
+                    if (err instanceof InteractionRequiredAuthError) {
+                        return; 
+                    }
+                    throw err;
+                }
+                
+                const res = await fetch(`https://graph.microsoft.com/v1.0/teams/${selectedTeam.id}/members`, {
+                    headers: { Authorization: `Bearer ${accessToken}` }
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    if (isMounted) {
+                        const members = data.value
+                            .filter((m: any) => m.userId && m.displayName)
+                            .map((m: any) => ({
+                                id: m.userId,
+                                displayName: m.displayName
+                            }));
+                        
+                        setTeamMembers(members);
+
+                        // Cache aktualisieren, falls es ein Favorit ist
+                        if (favorites.has(selectedTeam.id)) {
+                             const currentFav = await db.favoriteTeams.get(selectedTeam.id);
+                             if (currentFav) {
+                                 const updatedFav = { ...currentFav, members };
+                                 await db.favoriteTeams.put(updatedFav);
+                                 setCachedFavorites(prev => prev.map(f => f.id === selectedTeam.id ? updatedFav : f));
+                             }
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("Fehler beim Laden der Mitglieder", e);
+            }
+        };
+        
+        fetchMembers();
+
+        return () => { isMounted = false; };
+    }, [selectedTeam, account, isOnline, instance, cachedFavorites]); // cachedFavorites als Dependency wichtig!
+
     const handleTeamSelect = (event: any, value: Team | null) => {
         setSelectedTeam(value);
         setUploadSuccess(false);
         setCustomText("");
         setImageUrls([]);
-        setUploadedFiles([]); // Reset
+        setUploadedFiles([]);
+        setSelectedMentions([]); // Reset Mentions
     };
 
     // Kombiniere online Teams mit gecachten Favoriten für Offline
@@ -225,8 +391,20 @@ const TeamsList: React.FC = () => {
             }
 
             console.log('Poste Nachricht mit URLs:', uploadedUrls);
-            // Posten - Jetzt mit files statt base64Images
-            await postMessageToChannel(accessToken, post.teamId, post.channelId, post.text, uploadedUrls, files);
+            
+            //Mentions aus dem Post-Objekt holen
+            const mentions = post.mentions || [];
+
+            // Posten - Jetzt mit files UND mentions
+            await postMessageToChannel(
+                accessToken, 
+                post.teamId, 
+                post.channelId, 
+                post.text, 
+                uploadedUrls, 
+                files, 
+                mentions
+            );
             
             await db.posts.delete(post.id);
             await db.images.where('postId').equals(post.id).delete();
@@ -242,10 +420,11 @@ const TeamsList: React.FC = () => {
         const post = {
             teamId: selectedTeam.id,
             channelId: selectedChannel.id,
-            channelDisplayName: selectedChannel.displayName,  // Neu hinzufügen
+            channelDisplayName: selectedChannel.displayName,
             text: customText,
             imageUrls: [] as string[],
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            mentions: selectedMentions // Mentions speichern
         };
         const postId = await db.posts.add(post);
         if (files && files.length > 0) {
@@ -268,6 +447,7 @@ const TeamsList: React.FC = () => {
         setSelectedChannel(null);
         setSelectedTeam(null);
         setUploadSuccess(false);
+        setSelectedMentions([]); // Reset Mentions
     };
 
     const syncOfflinePosts = async () => {
@@ -318,8 +498,20 @@ const TeamsList: React.FC = () => {
                 }
 
                 console.log('Poste Nachricht mit URLs:', uploadedUrls);
-                // Posten - Jetzt mit files
-                await postMessageToChannel(accessToken, post.teamId, post.channelId, post.text, uploadedUrls, files);
+                
+                // HIER: Mentions aus dem Post-Objekt holen
+                const mentions = post.mentions || [];
+
+                // Posten - Jetzt mit files UND mentions
+                await postMessageToChannel(
+                    accessToken, 
+                    post.teamId, 
+                    post.channelId, 
+                    post.text, 
+                    uploadedUrls, 
+                    files, 
+                    mentions // <--- HIER übergeben
+                );
                 
                 await db.posts.delete(post.id);
                 await db.images.where('postId').equals(post.id).delete();
@@ -344,14 +536,15 @@ const TeamsList: React.FC = () => {
             const response = await instance.acquireTokenSilent(request);
             const accessToken = response.accessToken;
 
-            // Hier uploadedFiles übergeben
-            await postMessageToChannel(accessToken, selectedTeam.id, selectedChannel!.id, customText, imageUrls, uploadedFiles);
+            // Hier uploadedFiles und selectedMentions übergeben
+            await postMessageToChannel(accessToken, selectedTeam.id, selectedChannel!.id, customText, imageUrls, uploadedFiles, selectedMentions);
 
             alert("Beitrag erfolgreich in den Kanal gepostet!");
             setUploadSuccess(false);
             setCustomText("");
             setImageUrls([]);
             setUploadedFiles([]);
+            setSelectedMentions([]); // Reset Mentions
         } catch (err) {
             alert("Fehler beim Posten: " + (err instanceof Error ? err.message : "Unbekannter Fehler"));
         } finally {
@@ -393,21 +586,45 @@ const TeamsList: React.FC = () => {
                 sx={{ mb: 2 }}
             />
             {selectedTeam && (
-                <ChannelsList
-                    team={selectedTeam}
-                    onChannelSelect={setSelectedChannel}
-                    onUploadSuccess={(urls: string[], files?: File[], base64Images?: string[]) => {
-                        setImageUrls(urls);
-                        setUploadSuccess(true);
-                        // Files speichern für den Post
-                        setUploadedFiles(files || []);
-                    }}
-                    onCustomTextChange={setCustomText}
-                    customText={customText}
-                    isFavorite={favorites.has(selectedTeam.id)}
-                    cachedChannels={cachedFavorites.find(f => f.id === selectedTeam.id)?.channels || []}
-                    onSaveOffline={saveOfflinePost}
-                />
+                <>
+                    <ChannelsList
+                        team={selectedTeam}
+                        onChannelSelect={setSelectedChannel}
+                        onUploadSuccess={(urls: string[], files?: File[], base64Images?: string[]) => {
+                            setImageUrls(urls);
+                            setUploadSuccess(true);
+                            // Files speichern für den Post
+                            setUploadedFiles(files || []);
+                        }}
+                        onCustomTextChange={setCustomText}
+                        customText={customText}
+                        isFavorite={favorites.has(selectedTeam.id)}
+                        cachedChannels={cachedFavorites.find(f => f.id === selectedTeam.id)?.channels || []}
+                        onSaveOffline={saveOfflinePost}
+                    />
+                    
+                    {/* UI für Mentions hinzufügen */}
+                    {isOnline && (
+                        <Autocomplete
+                            multiple
+                            options={teamMembers}
+                            getOptionLabel={(option) => option.displayName}
+                            value={selectedMentions}
+                            onChange={(event, newValue) => {
+                                setSelectedMentions(newValue);
+                            }}
+                            renderInput={(params) => (
+                                <TextField 
+                                    {...params} 
+                                    label="Personen erwähnen (@)" 
+                                    placeholder="Namen eingeben..." 
+                                    variant="outlined"
+                                />
+                            )}
+                            sx={{ mt: 2 }}
+                        />
+                    )}
+                </>
             )}
             {uploadSuccess && customText.trim() && isOnline && account && (
                 <Button
