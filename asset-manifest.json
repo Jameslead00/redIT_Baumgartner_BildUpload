@@ -1,13 +1,13 @@
 {
   "files": {
     "main.css": "/redIT_Baumgartner_BildUpload/static/css/main.dd4c248f.css",
-    "main.js": "/redIT_Baumgartner_BildUpload/static/js/main.91951c89.js",
+    "main.js": "/redIT_Baumgartner_BildUpload/static/js/main.ffac8486.js",
     "index.html": "/redIT_Baumgartner_BildUpload/index.html",
     "main.dd4c248f.css.map": "/redIT_Baumgartner_BildUpload/static/css/main.dd4c248f.css.map",
-    "main.91951c89.js.map": "/redIT_Baumgartner_BildUpload/static/js/main.91951c89.js.map"
+    "main.ffac8486.js.map": "/redIT_Baumgartner_BildUpload/static/js/main.ffac8486.js.map"
   },
   "entrypoints": [
     "static/css/main.dd4c248f.css",
-    "static/js/main.91951c89.js"
+    "static/js/main.ffac8486.js"
   ]
 }
