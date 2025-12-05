@@ -166,7 +166,7 @@ export const postMessageToChannel = async (
     // Wir nutzen <p> für den Text-Block
     const textContent = mentionsHtml 
         ? `<p>${mentionsHtml} ${escapeHtml(customText || "")}</p>` 
-        : `<p style="font-size: 14px; font-weight: bold; margin-bottom: 12px;">${escapeHtml(customText || "New images uploaded!")}</p>`;
+        : `<p style="font-size: 14px; font-weight: bold; margin-bottom: 12px;">${escapeHtml(customText || "Neue Bilder hochgeladen: ")}</p>`;
 
     const messagePayload = {
         body: {

@@ -2,11 +2,12 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useMsal, useAccount } from "@azure/msal-react";
 import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import { loginRequest } from "../authConfig";
+import { db, Team, Channel } from '../db';
+import { logToSharePoint } from "../utils/Logger";
 import ChannelsList from "./ChannelsList";
 import { postMessageToChannel, MentionUser } from "./PostMessage"; // MentionUser importieren
 import { Autocomplete, TextField, Button, Typography, Box, Alert, IconButton } from "@mui/material";
 import { Star, StarBorder } from "@mui/icons-material";
-import { db, OfflineDB, FavoriteTeam, OfflinePost, Team, Channel } from '../db';
 import { checkFolderExists, createFolder, uploadLargeFile, uploadSmallFile, encodeFilesToBase64, getFolderPath } from './ImageUpload';
 
 const TeamsList: React.FC = () => {
@@ -245,37 +246,34 @@ const TeamsList: React.FC = () => {
         localStorage.setItem('favoriteTeams', JSON.stringify([...newFavorites]));
     };
 
-    // Mitglieder laden, wenn ein Team ausgewählt wird
+    // Mitglieder laden: Teil 1 - Aus Cache (reagiert auf Cache-Updates)
+    useEffect(() => {
+        if (!selectedTeam) {
+            setTeamMembers([]);
+            return;
+        }
+        
+        // Wir suchen im State 'cachedFavorites'
+        const cachedTeam = cachedFavorites.find(f => f.id === selectedTeam.id);
+        
+        // Prüfen ob Mitglieder im Cache sind
+        if (cachedTeam?.members && cachedTeam.members.length > 0) {
+            console.log(`Lade Mitglieder aus Cache für ${selectedTeam.displayName} (${cachedTeam.members.length} Mitglieder)`);
+            setTeamMembers(cachedTeam.members);
+        } else if (!isOnline) {
+            // Offline und kein Cache -> leer
+            console.warn("Offline und keine Mitglieder im Cache für dieses Team.");
+            setTeamMembers([]);
+        }
+    }, [selectedTeam, cachedFavorites, isOnline]);
+
+    // Mitglieder laden: Teil 2 - Von API (reagiert NICHT auf cachedFavorites -> verhindert Loop)
     useEffect(() => {
         let isMounted = true;
 
-        const fetchMembers = async () => {
-            if (!selectedTeam) {
-                setTeamMembers([]);
-                return;
-            }
+        const fetchMembersAPI = async () => {
+            if (!selectedTeam || !account || !isOnline) return;
             
-            // 1. Zuerst Cache prüfen (für Offline oder schnelles Laden)
-            // Wir suchen im State 'cachedFavorites', der jetzt korrekt gefüllt sein sollte
-            const cachedTeam = cachedFavorites.find(f => f.id === selectedTeam.id);
-            
-            // Prüfen ob Mitglieder im Cache sind
-            if (cachedTeam?.members && cachedTeam.members.length > 0) {
-                console.log(`Lade Mitglieder aus Cache für ${selectedTeam.displayName} (${cachedTeam.members.length} Mitglieder)`);
-                if (isMounted) setTeamMembers(cachedTeam.members);
-                
-                // Wenn wir offline sind, sind wir hier fertig
-                if (!isOnline) return;
-            } else if (!isOnline) {
-                // Offline und kein Cache -> leer
-                console.warn("Offline und keine Mitglieder im Cache für dieses Team.");
-                if (isMounted) setTeamMembers([]);
-                return;
-            }
-
-            if (!account || !isOnline) return;
-            
-            // 2. Wenn Online, API abfragen (Code bleibt wie vorher...)
             console.log(`Lade Mitglieder für Team (API): ${selectedTeam.displayName}`);
 
             const request = { ...loginRequest, account };
@@ -314,6 +312,7 @@ const TeamsList: React.FC = () => {
                              if (currentFav) {
                                  const updatedFav = { ...currentFav, members };
                                  await db.favoriteTeams.put(updatedFav);
+                                 // Dies triggert Effect 1, aber nicht diesen Effect 2!
                                  setCachedFavorites(prev => prev.map(f => f.id === selectedTeam.id ? updatedFav : f));
                              }
                         }
@@ -324,10 +323,10 @@ const TeamsList: React.FC = () => {
             }
         };
         
-        fetchMembers();
+        fetchMembersAPI();
 
         return () => { isMounted = false; };
-    }, [selectedTeam, account, isOnline, instance, cachedFavorites]); // cachedFavorites als Dependency wichtig!
+    }, [selectedTeam, account, isOnline, instance, favorites]); // WICHTIG: cachedFavorites entfernt!
 
     const handleTeamSelect = (event: any, value: Team | null) => {
         setSelectedTeam(value);
@@ -390,7 +389,23 @@ const TeamsList: React.FC = () => {
                 uploadedUrls.push(url);
             }
 
-            console.log('Poste Nachricht mit URLs:', uploadedUrls);
+            // LOGGING HINZUFÜGEN
+            try {
+                const totalSizeMB = files.reduce((acc, file) => acc + file.size, 0) / (1024 * 1024);
+                // Versuche Team-Namen zu finden oder nutze ID
+                const teamName = teams.find(t => t.id === post.teamId)?.displayName || post.teamId;
+                
+                await logToSharePoint(accessToken, {
+                    userEmail: account.username,
+                    sourceUrl: `Team: ${teamName} / Channel: ${post.channelDisplayName} (Sync)`,
+                    photoCount: files.length,
+                    totalSizeMB: parseFloat(totalSizeMB.toFixed(2)),
+                    targetTeamName: teamName,
+                    status: 'Success'
+                });
+            } catch (logErr) {
+                console.error("Logging-Fehler:", logErr);
+            }
             
             //Mentions aus dem Post-Objekt holen
             const mentions = post.mentions || [];
@@ -416,7 +431,8 @@ const TeamsList: React.FC = () => {
     };
 
     const saveOfflinePost = async (files?: File[]) => {
-        if (!selectedTeam || !selectedChannel || !customText.trim()) return;
+        // ÄNDERUNG: Erlaube leeren Text, wenn Dateien vorhanden sind
+        if (!selectedTeam || !selectedChannel || (!customText.trim() && (!files || files.length === 0))) return;
         const post = {
             teamId: selectedTeam.id,
             channelId: selectedChannel.id,
@@ -497,8 +513,6 @@ const TeamsList: React.FC = () => {
                     uploadedUrls.push(url);
                 }
 
-                console.log('Poste Nachricht mit URLs:', uploadedUrls);
-                
                 // HIER: Mentions aus dem Post-Objekt holen
                 const mentions = post.mentions || [];
 
@@ -526,7 +540,8 @@ const TeamsList: React.FC = () => {
     };
 
     const handlePostToChannel = async () => {
-        if (!account || !selectedTeam || !selectedChannel || !customText || imageUrls.length === 0) return;
+        // ÄNDERUNG: Erlaube leeren Text, wenn Bilder vorhanden sind
+        if (!account || !selectedTeam || !selectedChannel || (!customText && imageUrls.length === 0)) return;
 
         setPosting(true);
 
@@ -626,7 +641,8 @@ const TeamsList: React.FC = () => {
                     )}
                 </>
             )}
-            {uploadSuccess && customText.trim() && isOnline && account && (
+            {/* ÄNDERUNG: Button anzeigen auch ohne Text, wenn Upload erfolgreich war */}
+            {uploadSuccess && (customText.trim() || imageUrls.length > 0) && isOnline && account && (
                 <Button
                     variant="contained"
                     color="primary"

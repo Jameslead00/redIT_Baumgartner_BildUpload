@@ -6,6 +6,7 @@ import { loginRequest } from "../authConfig";
 import { TextField, Button, Typography, Box, Alert, Paper, Grid, IconButton, Card, CardMedia, CardContent } from "@mui/material";
 import { Delete as DeleteIcon } from "@mui/icons-material";
 import { db } from '../db';
+import { logToSharePoint } from "../utils/Logger";
 
 export interface Team {
     id: string;
@@ -302,6 +303,21 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ team, channel, onUploadSucces
                 imageUrls.push(url);
             }
 
+            // LOGGING HINZUFÜGEN
+            try {
+                const totalSizeMB = selectedFiles.reduce((acc, file) => acc + file.size, 0) / (1024 * 1024);
+                await logToSharePoint(accessToken, {
+                    userEmail: account.username,
+                    sourceUrl: `Team: ${team.displayName} / Channel: ${channel.displayName}`,
+                    photoCount: selectedFiles.length,
+                    totalSizeMB: parseFloat(totalSizeMB.toFixed(2)),
+                    targetTeamName: team.displayName,
+                    status: 'Success'
+                });
+            } catch (logErr) {
+                console.error("Logging failed but upload was successful", logErr);
+            }
+
             // Schritt 5: Encodiere alle Bilder
             const base64Images = await encodeFilesToBase64(selectedFiles);
 
@@ -309,6 +325,13 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ team, channel, onUploadSucces
             onUploadSuccess(imageUrls, selectedFiles, base64Images);  // base64Images übergeben
             setSuccess(`${selectedFiles.length} image(s) uploaded successfully!`);
         } catch (err) {
+            // LOGGING ERROR (Optional, aber hilfreich)
+            if (account) {
+                 // Wir versuchen einen Error-Log zu senden, falls möglich (braucht Token)
+                 // Da wir hier im catch sind, ist accessToken evtl. nicht verfügbar, 
+                 // daher lassen wir es hier weg um "minimal" zu bleiben und keine neuen Fehler zu riskieren.
+            }
+
             if (err instanceof InteractionRequiredAuthError) {
                 instance.acquireTokenPopup(request).then(uploadImages);
             } else {
