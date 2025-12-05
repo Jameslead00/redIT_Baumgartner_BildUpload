@@ -344,7 +344,8 @@ const TeamsList: React.FC = () => {
     }, [isOnline, teams, sortedTeams, cachedFavorites]);
 
     // Füge syncPost Funktion hinzu (falls nicht vorhanden)
-    const syncPost = async (post: any) => {
+    // ÄNDERUNG: Callback Signatur angepasst
+    const syncPost = async (post: any, onProgress?: (current: number, total: number) => void) => {
         if (!account || !isOnline) return;
         setPosting(true);
         try {
@@ -377,7 +378,19 @@ const TeamsList: React.FC = () => {
 
             // Hochladen
             const uploadedUrls: string[] = [];
-            for (const img of images) {
+            const totalFiles = images.length;
+
+            // Initialisierung entfernen wir hier, da sie gleich im Loop passiert
+            // if (onProgress) onProgress(0, totalFiles); 
+
+            for (let i = 0; i < totalFiles; i++) {
+                // ÄNDERUNG: Progress VOR dem Upload aktualisieren
+                // Damit steht da "Uploading image 1 of 4" während Bild 1 lädt
+                if (onProgress) {
+                    onProgress(i + 1, totalFiles);
+                }
+
+                const img = images[i];
                 console.log('Lade Bild hoch:', img.file.name);
                 let url: string;
                 if (img.file.size > 4 * 1024 * 1024) {
@@ -430,7 +443,8 @@ const TeamsList: React.FC = () => {
         setPosting(false);
     };
 
-    const saveOfflinePost = async (files?: File[]) => {
+    // ÄNDERUNG: Callback Signatur angepasst
+    const saveOfflinePost = async (files?: File[], onProgress?: (current: number, total: number) => void) => {
         // ÄNDERUNG: Erlaube leeren Text, wenn Dateien vorhanden sind
         if (!selectedTeam || !selectedChannel || (!customText.trim() && (!files || files.length === 0))) return;
         const post = {
@@ -453,7 +467,7 @@ const TeamsList: React.FC = () => {
 
         // Neu: Wenn Online, sync nur diesen Post automatisch (ohne await)
         if (isOnline && account) {
-            await syncPost(newPost);  // Warte, bis Sync fertig
+            await syncPost(newPost, onProgress);
         }
         alert(`${files?.length || 0} image(s) saved ${isOnline ? 'and uploaded' : 'offline'}!`);
         window.location.reload();  // Seite neu laden, um State zu resetten

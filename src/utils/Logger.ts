@@ -23,7 +23,7 @@ export const logToSharePoint = async (accessToken: string, entry: LogEntry) => {
     const item = {
         fields: {
             Title: `Upload by ${entry.userEmail}`,
-            SourceUrl: window.location.href, // HIER GEÄNDERT: Nimmt jetzt die aktuelle Browser-URL
+            SourceUrl: window.location.href,
             Logtime: localTimeString,
             PhotoCount: entry.photoCount,
             TotalSizeMB: entry.totalSizeMB,

@@ -7,6 +7,7 @@ import { TextField, Button, Typography, Box, Alert, Paper, Grid, IconButton, Car
 import { Delete as DeleteIcon } from "@mui/icons-material";
 import { db } from '../db';
 import { logToSharePoint } from "../utils/Logger";
+import { UploadProgress } from "./UploadProgress";
 
 export interface Team {
     id: string;
@@ -21,10 +22,11 @@ export interface Channel {
 interface ImageUploadProps {
     team: Team;
     channel: Channel;
-    onUploadSuccess: (urls: string[], files?: File[], base64Images?: string[]) => void;  // base64Images hinzufügen
+    onUploadSuccess: (urls: string[], files?: File[], base64Images?: string[]) => void;
     onCustomTextChange: (text: string) => void;
     customText: string;
-    onSaveOffline?: (files: File[]) => void;
+    // ÄNDERUNG: Callback Signatur erweitert
+    onSaveOffline?: (files: File[], onProgress?: (current: number, total: number) => void) => Promise<void> | void;
 }
 
 interface FileData {
@@ -222,11 +224,12 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ team, channel, onUploadSucces
     const account = useAccount(accounts[0] || {});
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [uploading, setUploading] = useState<boolean>(false);
+    const [progressData, setProgressData] = useState({ current: 0, total: 0, percent: 0 }); // NEU: Kombinierter State
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
     const [thumbnails, setThumbnails] = useState<string[]>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const isOnline = navigator.onLine;  // Oder prop übergeben
+    const isOnline = navigator.onLine;
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files && event.target.files.length > 0) {
@@ -344,16 +347,28 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ team, channel, onUploadSucces
 
     const handleUpload = async () => {
         if (isOnline && account) {
-            // Online: Speichere wie Offline, dann sync
             if (onSaveOffline) {
-                onSaveOffline(selectedFiles);
+                setUploading(true);
+                setProgressData({ current: 0, total: selectedFiles.length, percent: 0 });
+                try {
+                    // Callback aktualisiert jetzt current und total
+                    await onSaveOffline(selectedFiles, (current, total) => {
+                        // ÄNDERUNG: Prozentsatz basierend auf abgeschlossenen Bildern (current - 1)
+                        // Beispiel bei 4 Bildern:
+                        // Bild 1 startet -> (0/4)*100 = 0%
+                        // Bild 2 startet -> (1/4)*100 = 25%
+                        const percent = Math.round(((current - 1) / total) * 100);
+                        setProgressData({ current, total, percent });
+                    });
+                } catch (e) {
+                    console.error(e);
+                    setUploading(false);
+                }
             }
-            setSuccess(`${selectedFiles.length} image(s) saved and will upload automatically!`);
-            setSelectedFiles([]);
         } else {
             // Offline: Speichere lokal
             if (onSaveOffline) {
-                onSaveOffline(selectedFiles);
+                await onSaveOffline(selectedFiles);
             }
             setSuccess(`${selectedFiles.length} image(s) saved offline!`);
             setSelectedFiles([]);
@@ -447,15 +462,24 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ team, channel, onUploadSucces
                     sx={{ mb: 2 }}
                 />
             )}
+
+            {/* NEU: Progress Komponente einbinden */}
+            <UploadProgress 
+                uploading={uploading} 
+                progress={progressData.percent} 
+                currentFile={progressData.current}
+                totalFiles={progressData.total}
+            />
+
             <Button
                 variant="contained"
                 color="secondary"
                 onClick={handleUpload}
-                disabled={!selectedFiles.length || uploading || (!isOnline && !customText.trim())}  // Deaktiviere, wenn offline und keine Nachricht
+                disabled={!selectedFiles.length || uploading || (!isOnline && !customText.trim())}
                 fullWidth
                 sx={{ mb: 2 }}
             >
-                {uploading ? "Uploading..." : (isOnline ? "Datei(en) hochladen" : "Offline speichern")}
+                {uploading ? `Uploading (${progressData.current}/${progressData.total})...` : (isOnline ? "Datei(en) hochladen" : "Offline speichern")}
             </Button>
             {error && <Alert severity="error" sx={{ mt: 2 }}>Error: {error}</Alert>}
             {success && <Alert severity="success" sx={{ mt: 2 }}>{success}</Alert>}
