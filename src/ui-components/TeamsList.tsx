@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useMsal, useAccount } from "@azure/msal-react";
 import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import { loginRequest } from "../authConfig";
-import { db, Team, Channel } from '../db';
+import { db, Team, Channel, SubFolder } from '../db'; // Import SubFolder
 import { logToSharePoint } from "../utils/Logger";
 import ChannelsList from "./ChannelsList";
 import { postMessageToChannel, MentionUser } from "./PostMessage"; // MentionUser importieren
@@ -114,7 +114,7 @@ const TeamsList: React.FC = () => {
         // Entferne loadAndCacheChannelsForFavorites aus useEffect, um Loop zu vermeiden
     }, [instance, account, isOnline]);  // Entferne favorites aus dependencies, um Loop zu vermeiden
 
-    // Neuer useEffect für Kanäle- UND Mitglieder-Caching, nur wenn nötig
+    // Neuer useEffect für Kanäle, Mitglieder UND Subfolders Caching
     useEffect(() => {
         const loadAndCacheDataForFavorites = async () => {
             if (!account || !isOnline || favorites.size === 0) return;
@@ -129,6 +129,7 @@ const TeamsList: React.FC = () => {
                 if (team) {
                     let channels = cachedFav?.channels;
                     let members = cachedFav?.members;
+                    let channelSubFolders = cachedFav?.channelSubFolders || {}; // Load existing
                     let needsUpdate = false;
 
                     // 1. Kanäle laden falls fehlen
@@ -168,13 +169,57 @@ const TeamsList: React.FC = () => {
                         }
                     }
 
+                    // 3. Subfolders für jeden Kanal laden (NEW)
+                    if (channels) {
+                        // Get Site ID first (needed for drive queries)
+                        try {
+                            const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/groups/${favId}/sites/root`, {
+                                headers: { Authorization: `Bearer ${accessToken}` },
+                            });
+                            if (siteResponse.ok) {
+                                const siteData = await siteResponse.json();
+                                const siteId = siteData.id;
+
+                                for (const channel of channels) {
+                                    // Always try to update, or check if missing
+                                    // If we want to refresh cache, we should probably do it.
+                                    // For now, let's check if it's missing or empty
+                                    
+                                    const folderPath = getFolderPath(channel.displayName);
+                                    try {
+                                        const childrenResponse = await fetch(
+                                            `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${folderPath}:/children?filter=folder ne null&select=id,name`, 
+                                            { headers: { Authorization: `Bearer ${accessToken}` } }
+                                        );
+                                        
+                                        if (childrenResponse.ok) {
+                                            const data = await childrenResponse.json();
+                                            const subs = data.value.map((item: any) => ({ id: item.id, name: item.name }));
+                                            channelSubFolders[channel.id] = subs;
+                                            needsUpdate = true;
+                                        } else if (childrenResponse.status === 404) {
+                                            // Folder doesn't exist -> Empty list
+                                            channelSubFolders[channel.id] = [];
+                                            needsUpdate = true;
+                                        }
+                                    } catch (e) {
+                                        console.warn(`Could not fetch subfolders for channel ${channel.displayName}`, e);
+                                    }
+                                }
+                            }
+                        } catch (e) {
+                            console.error("Error fetching site ID for subfolders", e);
+                        }
+                    }
+
                     // Wenn Daten aktualisiert wurden, in DB speichern
                     if (needsUpdate && channels) {
                         const newFavData = { 
                             id: favId, 
                             displayName: team.displayName, 
                             channels: channels,
-                            members: members || [] 
+                            members: members || [],
+                            channelSubFolders: channelSubFolders // Save subfolders
                         };
                         await db.favoriteTeams.put(newFavData);
                         
@@ -369,7 +414,11 @@ const TeamsList: React.FC = () => {
             console.log('Site ID:', siteId);
 
             // Bestimme den Ordner-Pfad
-            const folderPath = getFolderPath(post.channelDisplayName);
+            let folderPath = getFolderPath(post.channelDisplayName);
+            // NEW: Append Subfolder if exists
+            if (post.subFolder) {
+                folderPath = `${folderPath}/${post.subFolder}`;
+            }
             console.log('Verwende Ordner-Pfad:', folderPath);
 
             // Ordner prüfen/erstellen
@@ -410,7 +459,8 @@ const TeamsList: React.FC = () => {
                 
                 await logToSharePoint(accessToken, {
                     userEmail: account.username,
-                    sourceUrl: `Team: ${teamName} / Channel: ${post.channelDisplayName} (Sync)`,
+                    // NEW: Log the specific subfolder in sourceUrl
+                    sourceUrl: `Team: ${teamName} / Channel: ${post.channelDisplayName} / Folder: ${post.subFolder || "Root"} (Sync)`,
                     photoCount: files.length,
                     totalSizeMB: parseFloat(totalSizeMB.toFixed(2)),
                     targetTeamName: teamName,
@@ -444,7 +494,7 @@ const TeamsList: React.FC = () => {
     };
 
     // ÄNDERUNG: Callback Signatur angepasst
-    const saveOfflinePost = async (files?: File[], onProgress?: (current: number, total: number) => void) => {
+    const saveOfflinePost = async (files?: File[], subFolder: string = "", onProgress?: (current: number, total: number) => void) => {
         // ÄNDERUNG: Erlaube leeren Text, wenn Dateien vorhanden sind
         if (!selectedTeam || !selectedChannel || (!customText.trim() && (!files || files.length === 0))) return;
         const post = {
@@ -454,7 +504,8 @@ const TeamsList: React.FC = () => {
             text: customText,
             imageUrls: [] as string[],
             timestamp: Date.now(),
-            mentions: selectedMentions // Mentions speichern
+            mentions: selectedMentions, // Mentions speichern
+            subFolder: subFolder // Subfolder speichern
         };
         const postId = await db.posts.add(post);
         if (files && files.length > 0) {
@@ -466,10 +517,11 @@ const TeamsList: React.FC = () => {
         setOfflinePosts([...offlinePosts, newPost]);
 
         // Neu: Wenn Online, sync nur diesen Post automatisch (ohne await)
-        if (isOnline && account) {
+        const uploaded = isOnline && account;
+        if (uploaded) {
             await syncPost(newPost, onProgress);
         }
-        alert(`${files?.length || 0} image(s) saved ${isOnline ? 'and uploaded' : 'offline'}!`);
+        alert(`${files?.length || 0} image(s) saved ${uploaded ? 'and uploaded' : 'offline'}!`);
         window.location.reload();  // Seite neu laden, um State zu resetten
         // Reset alles
         setCustomText('');
@@ -506,7 +558,11 @@ const TeamsList: React.FC = () => {
                 console.log('Site ID:', siteId);
 
                 // Bestimme den Ordner-Pfad
-                const folderPath = getFolderPath(post.channelDisplayName);
+                let folderPath = getFolderPath(post.channelDisplayName);
+                // NEW: Append Subfolder if exists
+                if (post.subFolder) {
+                    folderPath = `${folderPath}/${post.subFolder}`;
+                }
                 console.log('Verwende Ordner-Pfad:', folderPath);
 
                 // Ordner prüfen/erstellen
@@ -629,6 +685,8 @@ const TeamsList: React.FC = () => {
                         customText={customText}
                         isFavorite={favorites.has(selectedTeam.id)}
                         cachedChannels={cachedFavorites.find(f => f.id === selectedTeam.id)?.channels || []}
+                        // FIX: Pass cachedSubFolders prop
+                        cachedSubFolders={cachedFavorites.find(f => f.id === selectedTeam.id)?.channelSubFolders || {}}
                         onSaveOffline={saveOfflinePost}
                     />
                     

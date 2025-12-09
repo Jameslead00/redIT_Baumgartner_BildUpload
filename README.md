@@ -3,13 +3,14 @@
 Eine moderne, responsive Web-App zur einfachen Erstellung von Posts in Microsoft Teams mit Bild-Uploads. Die App bietet eine elegante Benutzeroberfläche und unterstützt Offline-Funktionalität für nahtlose Nutzung ohne Internetverbindung.
 
 ## Features
-* **Microsoft Teams Integration:** Authentifizierung via MSAL, Auswahl von Teams und Kanälen.
-* **Bild-Upload:** Hochladen von Bildern in den OneDrive-Ordner "Bilder" des Teams.
-* **Post-Erstellung:** Erstellen von Posts mit Text, **Benutzer-Erwähnungen (@Mentions)** und Bildern. Dank "Hosted Contents" werden **alle Bilder direkt inline** im Teams-Post angezeigt (kein Limit auf 4 Bilder mehr).
-* **Offline-Modus:** Vollständige Vorbereitung von Posts offline, lokale Speicherung mit Dexie, halbautomatische Synchronisation bei Wiederverbindung.
-* **Caching:** Teams, Kanäle und Mitglieder werden für Favoriten gecached, um Offline-Zugang und Erwähnungen auch ohne Internet zu ermöglichen. Erfolgreich hochgeladene Posts werden automatisch aus dem Cache entfernt.
-* **Service Worker:** Caching für PWA-ähnliche Erfahrung.
-* **Mobile-Unterstützung:** MSAL verwendet Redirect für bessere Kompatibilität auf Mobilgeräten.
+* Microsoft Teams Integration: Authentifizierung via MSAL, Auswahl von Teams und Kanälen.
+* Bild-Upload: Hochladen von Bildern in den OneDrive-Ordner "Bilder" des Teams. Thumbnails werden für schnelle Vorschau generiert.
+* Unterordner-Auswahl: Optionales Auswählen eines Unterordners im "Bilder"-Verzeichnis für gezielte Uploads. (Hinweis: Der Ordner "Bilder" und die entsprechenden Unterordner müssen bereits im Kanal existieren).
+* Post-Erstellung: Erstellen von Posts mit Text und bis zu 4 Bildern in ausgewählten Kanälen (weitere Bilder werden hochgeladen, aber nicht im Post angezeigt).
+* Offline-Modus: Vollständige Vorbereitung von Posts offline, lokale Speicherung mit Dexie, halbautomatische Synchronisation bei Wiederverbindung.
+* Caching: Teams und Kanäle werden für Favoriten gecached, um Offline-Zugang zu ermöglichen. Erfolgreich hochgeladene Posts werden automatisch aus dem Cache entfernt.
+* Service Worker: Caching für PWA-ähnliche Erfahrung.
+* Mobile-Unterstützung: MSAL verwendet Redirect für bessere Kompatibilität auf Mobilgeräten.
 
 ## Technologien
 * Frontend: React 18, TypeScript, Material-UI (MUI)
@@ -42,6 +43,7 @@ Eine moderne, responsive Web-App zur einfachen Erstellung von Posts in Microsoft
 
 2. Wähle ein Team aus der Liste (Favoriten werden inkl. Mitglieder gecached).
 3. Wähle einen Kanal.
+4. (Optional) Wähle einen Unterordner (Voraussetzung: Der Ordner "Bilder" und die Unterordner müssen bereits existieren).
 
 **Bilder hochladen und Post erstellen:**
 
@@ -58,10 +60,10 @@ Eine moderne, responsive Web-App zur einfachen Erstellung von Posts in Microsoft
 
 **Offline-Funktionalität**
 
-* **Speicherung:** Posts, Bilder, Metadaten und Mentions werden in IndexedDB (Dexie) gespeichert.
-* **Sync:** Bei Online/Login werden Bilder zu OneDrive hochgeladen und Posts in Teams erstellt (automatisch für Online, manuell für Offline).
-* **Caching:** Favorisierte Teams, deren Kanäle und Mitglieder sind offline verfügbar.
-* **Hinweise:** App zeigt Warnungen für Offline-Status und erfordert Text für Offline-Speicherung.
+* Speicherung: Posts, Bilder und Metadaten werden in IndexedDB (Dexie) gespeichert.
+* Sync: Bei Online/Login werden Bilder zu OneDrive hochgeladen und Posts in Teams erstellt (automatisch für Online, manuell für Offline).
+* Caching: Favorisierte Teams, Kanäle und Unterordner sind offline verfügbar. Erfolgreich hochgeladene Posts werden aus dem Cache entfernt.
+* Hinweise: App zeigt Warnungen für Offline-Status und erfordert Text für Offline-Speicherung.
 
 ## Deployment
 **Azure Static Web Apps (empfohlen)**
