@@ -15,7 +15,7 @@ Eine moderne, responsive Web-App zur einfachen Erstellung von Posts in Microsoft
 ## Technologien
 * Frontend: React 18, TypeScript, Material-UI (MUI)
 * Authentifizierung: Microsoft Authentication Library (MSAL) für Azure AD
-* API: Microsoft Graph API für Teams, Kanäle und OneDrive
+* API: Microsoft Graph API für Teams, Kanäle, Mitglieder und OneDrive
 * Offline-Speicherung: Dexie (IndexedDB)
 * Build-Tool: Create React App, npm
 * Hosting: Azure Static Web Apps (empfohlen), GitHub Pages (alternativ)
@@ -28,35 +28,37 @@ Eine moderne, responsive Web-App zur einfachen Erstellung von Posts in Microsoft
 * Zugriff auf Microsoft Teams und OneDrive im Tenant
 
 ## Konfiguration
-* authConfig.ts: Passe Client-ID, Authority, Redirect-URI und Post-Logout-URI an (voller Pfad für korrekte Redirects).
-* db.ts: Dexie-Datenbank für Offline-Speicherung.
-* styles.css: Anpassung des Designs.
+* **authConfig.ts:** Passe Client-ID, Authority, Redirect-URI und Post-Logout-URI an.
+    * Erforderliche Scopes: `User.Read`, `Team.ReadBasic.All`, `Channel.ReadBasic.All`, `ChannelMessage.Send`, `Files.ReadWrite`, `Sites.ReadWrite.All`, `TeamMember.Read.All`.
+* **db.ts:** Dexie-Datenbank für Offline-Speicherung (Schema v2 inkl. Mentions & Members).
+* **styles.css:** Anpassung des Designs.
 
 ## Verwendung
 
-Login:
+**Login:**
 
 1. Klicke auf "Anmelden" und authentifiziere dich mit Microsoft.
 
-Team und Kanal auswählen:
+**Team und Kanal auswählen:**
 
-2. Wähle ein Team aus der Liste (Favoriten werden gecached).
+2. Wähle ein Team aus der Liste (Favoriten werden inkl. Mitglieder gecached).
 3. Wähle einen Kanal.
 4. (Optional) Wähle einen Unterordner (Voraussetzung: Der Ordner "Bilder" und die Unterordner müssen bereits existieren).
 
-Bilder hochladen und Post erstellen:
+**Bilder hochladen und Post erstellen:**
 
-5. Wähle Bilder aus.
-6. Füge optional Text hinzu.
-7. Klicke "Datei(en) hochladen" – Bilder werden gecached und automatisch hochgeladen/gepostet.
+4. Wähle Bilder aus.
+5. Füge optional Text hinzu.
+6. Optional: Erwähne Personen über das Dropdown-Menü (@Name).
+7. Klicke "Datei(en) hochladen" – Bilder werden gecached und automatisch hochgeladen/gepostet. Alle Bilder erscheinen direkt im Teams-Post.
 
 ## Offline-Modus:
 
 * Bei fehlender Internetverbindung oder nicht eingeloggt: Vollständiges Formular verfügbar.
-* Eingaben werden lokal gespeichert.
+* Eingaben (inkl. Bilder und Mentions) werden lokal gespeichert.
 * Bei Wiederverbindung: Button "Upload (n) cached post(s)" erscheint – klicke zum manuellen Synchronisieren.
 
-Offline-Funktionalität
+**Offline-Funktionalität**
 
 * Speicherung: Posts, Bilder und Metadaten werden in IndexedDB (Dexie) gespeichert.
 * Sync: Bei Online/Login werden Bilder zu OneDrive hochgeladen und Posts in Teams erstellt (automatisch für Online, manuell für Offline).
@@ -64,17 +66,17 @@ Offline-Funktionalität
 * Hinweise: App zeigt Warnungen für Offline-Status und erfordert Text für Offline-Speicherung.
 
 ## Deployment
-Azure Static Web Apps (empfohlen)
+**Azure Static Web Apps (empfohlen)**
 
 1. Erstelle eine Static Web App in Azure Portal.
 2. Verbinde mit Azure DevOps-Repo.
-3. Konfiguriere Build: npm run build, Output: build.
+3. Konfiguriere Build: `npm run build`, Output: `build`.
 4. Pipeline in ADO: Verwende die bereitgestellte YAML für automatischen Build und Deploy.
 
-GitHub Pages (alternativ)
+**GitHub Pages (alternativ)**
 
-1. Baue die App: npm run build.
-2. Pushe build zu einem GitHub-Repo (gh-pages Branch).
+1. Baue die App: `npm run build`.
+2. Pushe build zu einem GitHub-Repo (`gh-pages` Branch).
 3. Aktiviere GitHub Pages für den Branch.
 
 ## Lizenz
