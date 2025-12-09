@@ -369,7 +369,11 @@ const TeamsList: React.FC = () => {
             console.log('Site ID:', siteId);
 
             // Bestimme den Ordner-Pfad
-            const folderPath = getFolderPath(post.channelDisplayName);
+            let folderPath = getFolderPath(post.channelDisplayName);
+            // NEW: Append Subfolder if exists
+            if (post.subFolder) {
+                folderPath = `${folderPath}/${post.subFolder}`;
+            }
             console.log('Verwende Ordner-Pfad:', folderPath);
 
             // Ordner prüfen/erstellen
@@ -410,7 +414,8 @@ const TeamsList: React.FC = () => {
                 
                 await logToSharePoint(accessToken, {
                     userEmail: account.username,
-                    sourceUrl: `Team: ${teamName} / Channel: ${post.channelDisplayName} (Sync)`,
+                    // NEW: Log the specific subfolder in sourceUrl
+                    sourceUrl: `Team: ${teamName} / Channel: ${post.channelDisplayName} / Folder: ${post.subFolder || "Root"} (Sync)`,
                     photoCount: files.length,
                     totalSizeMB: parseFloat(totalSizeMB.toFixed(2)),
                     targetTeamName: teamName,
@@ -444,7 +449,7 @@ const TeamsList: React.FC = () => {
     };
 
     // ÄNDERUNG: Callback Signatur angepasst
-    const saveOfflinePost = async (files?: File[], onProgress?: (current: number, total: number) => void) => {
+    const saveOfflinePost = async (files?: File[], subFolder: string = "", onProgress?: (current: number, total: number) => void) => {
         // ÄNDERUNG: Erlaube leeren Text, wenn Dateien vorhanden sind
         if (!selectedTeam || !selectedChannel || (!customText.trim() && (!files || files.length === 0))) return;
         const post = {
@@ -454,7 +459,8 @@ const TeamsList: React.FC = () => {
             text: customText,
             imageUrls: [] as string[],
             timestamp: Date.now(),
-            mentions: selectedMentions // Mentions speichern
+            mentions: selectedMentions, // Mentions speichern
+            subFolder: subFolder // Subfolder speichern
         };
         const postId = await db.posts.add(post);
         if (files && files.length > 0) {
@@ -506,7 +512,11 @@ const TeamsList: React.FC = () => {
                 console.log('Site ID:', siteId);
 
                 // Bestimme den Ordner-Pfad
-                const folderPath = getFolderPath(post.channelDisplayName);
+                let folderPath = getFolderPath(post.channelDisplayName);
+                // NEW: Append Subfolder if exists
+                if (post.subFolder) {
+                    folderPath = `${folderPath}/${post.subFolder}`;
+                }
                 console.log('Verwende Ordner-Pfad:', folderPath);
 
                 // Ordner prüfen/erstellen

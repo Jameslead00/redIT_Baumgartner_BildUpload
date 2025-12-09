@@ -1,9 +1,10 @@
-// filepath: /workspaces/microsoft-authentication-library-for-js/samples/msal-react-samples/typescript-sample/src/ui-components/ImageUpload.tsx
-import React, { useState, useRef } from "react";
+// filepath: /workspaces/redIT_Baumgartner_BildUpload/src/ui-components/ImageUpload.tsx
+import React, { useState, useRef, useEffect } from "react"; // Added useEffect
 import { useMsal, useAccount } from "@azure/msal-react";
 import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import { loginRequest } from "../authConfig";
-import { TextField, Button, Typography, Box, Alert, Paper, Grid, IconButton, Card, CardMedia, CardContent } from "@mui/material";
+// Added Select, MenuItem, FormControl, InputLabel
+import { TextField, Button, Typography, Box, Alert, Paper, Grid, IconButton, Card, CardMedia, CardContent, Select, MenuItem, FormControl, InputLabel, SelectChangeEvent } from "@mui/material";
 import { Delete as DeleteIcon } from "@mui/icons-material";
 import { db } from '../db';
 import { logToSharePoint } from "../utils/Logger";
@@ -25,8 +26,8 @@ interface ImageUploadProps {
     onUploadSuccess: (urls: string[], files?: File[], base64Images?: string[]) => void;
     onCustomTextChange: (text: string) => void;
     customText: string;
-    // ÄNDERUNG: Callback Signatur erweitert
-    onSaveOffline?: (files: File[], onProgress?: (current: number, total: number) => void) => Promise<void> | void;
+    // ÄNDERUNG: Callback Signatur erweitert um subFolder
+    onSaveOffline?: (files: File[], subFolder: string, onProgress?: (current: number, total: number) => void) => Promise<void> | void;
 }
 
 interface FileData {
@@ -219,17 +220,80 @@ export const encodeFilesToBase64 = async (files: File[]): Promise<string[]> => {
     return base64Images;
 };
 
+// Interface for Subfolders
+interface SubFolder {
+    id: string;
+    name: string;
+}
+
 const ImageUpload: React.FC<ImageUploadProps> = ({ team, channel, onUploadSuccess, onCustomTextChange, customText, onSaveOffline }) => {
     const { instance, accounts } = useMsal();
     const account = useAccount(accounts[0] || {});
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [uploading, setUploading] = useState<boolean>(false);
-    const [progressData, setProgressData] = useState({ current: 0, total: 0, percent: 0 }); // NEU: Kombinierter State
+    const [progressData, setProgressData] = useState({ current: 0, total: 0, percent: 0 });
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
     const [thumbnails, setThumbnails] = useState<string[]>([]);
+    
+    // NEW: State for Subfolders
+    const [subFolders, setSubFolders] = useState<SubFolder[]>([]);
+    const [selectedSubFolder, setSelectedSubFolder] = useState<string>(""); // "" means root (Bilder)
+    const [loadingFolders, setLoadingFolders] = useState<boolean>(false);
+
     const fileInputRef = useRef<HTMLInputElement>(null);
     const isOnline = navigator.onLine;
+
+    // NEW: Fetch Subfolders when Channel changes
+    useEffect(() => {
+        const fetchSubFolders = async () => {
+            if (!account || !isOnline) return;
+            
+            setLoadingFolders(true);
+            setSubFolders([]);
+            setSelectedSubFolder(""); // Reset selection
+
+            const request = { ...loginRequest, account };
+
+            try {
+                const response = await instance.acquireTokenSilent(request);
+                const accessToken = response.accessToken;
+
+                // 1. Get Site ID
+                const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/groups/${team.id}/sites/root`, {
+                    headers: { Authorization: `Bearer ${accessToken}` },
+                });
+                if (!siteResponse.ok) throw new Error("Failed to get site ID");
+                const siteData = await siteResponse.json();
+                const siteId = siteData.id;
+
+                // 2. Get Path to "Bilder"
+                const folderPath = getFolderPath(channel.displayName); // e.g., "General/Bilder"
+
+                // 3. List Children of "Bilder"
+                // We use a specific query to only get folders
+                const childrenResponse = await fetch(
+                    `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${folderPath}:/children?filter=folder ne null&select=id,name`, 
+                    { headers: { Authorization: `Bearer ${accessToken}` } }
+                );
+
+                if (childrenResponse.ok) {
+                    const data = await childrenResponse.json();
+                    setSubFolders(data.value.map((item: any) => ({ id: item.id, name: item.name })));
+                } else if (childrenResponse.status === 404) {
+                    // "Bilder" folder doesn't exist yet, which is fine.
+                    console.log("Bilder folder does not exist yet.");
+                }
+            } catch (err) {
+                console.error("Error fetching subfolders:", err);
+                // We don't block the UI, just show no subfolders
+            } finally {
+                setLoadingFolders(false);
+            }
+        };
+
+        fetchSubFolders();
+    }, [team.id, channel.displayName, account, isOnline, instance]);
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files && event.target.files.length > 0) {
@@ -285,10 +349,20 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ team, channel, onUploadSucces
             const siteId = siteData.id;
 
             // Schritt 2: Bestimme den Ordner-Pfad
-            const folderPath = getFolderPath(channel.displayName);  // Kein await
+            let folderPath = getFolderPath(channel.displayName);
+            
+            // NEW: Append Subfolder if selected
+            if (selectedSubFolder) {
+                folderPath = `${folderPath}/${selectedSubFolder}`;
+            }
+            
             console.log('Verwende Ordner-Pfad:', folderPath);
 
             // Schritt 3: Überprüfe und erstelle den Ordner
+            // Note: If subfolder is selected, we assume it exists (as per requirement), 
+            // but checkFolderExists/createFolder handles the recursive creation if needed or we can rely on it existing.
+            // The current createFolder implementation might fail if parent doesn't exist, 
+            // but since "Bilder" is parent and we check it, it should be fine.
             const folderExists = await checkFolderExists(accessToken, siteId, folderPath);
             if (!folderExists) {
                 await createFolder(accessToken, siteId, folderPath);
@@ -311,7 +385,8 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ team, channel, onUploadSucces
                 const totalSizeMB = selectedFiles.reduce((acc, file) => acc + file.size, 0) / (1024 * 1024);
                 await logToSharePoint(accessToken, {
                     userEmail: account.username,
-                    sourceUrl: `Team: ${team.displayName} / Channel: ${channel.displayName}`,
+                    // NEW: Log the specific subfolder in sourceUrl
+                    sourceUrl: `Team: ${team.displayName} / Channel: ${channel.displayName} / Folder: ${selectedSubFolder || "Root"}`,
                     photoCount: selectedFiles.length,
                     totalSizeMB: parseFloat(totalSizeMB.toFixed(2)),
                     targetTeamName: team.displayName,
@@ -352,7 +427,8 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ team, channel, onUploadSucces
                 setProgressData({ current: 0, total: selectedFiles.length, percent: 0 });
                 try {
                     // Callback aktualisiert jetzt current und total
-                    await onSaveOffline(selectedFiles, (current, total) => {
+                    // Pass selectedSubFolder
+                    await onSaveOffline(selectedFiles, selectedSubFolder, (current, total) => {
                         // ÄNDERUNG: Prozentsatz basierend auf abgeschlossenen Bildern (current - 1)
                         // Beispiel bei 4 Bildern:
                         // Bild 1 startet -> (0/4)*100 = 0%
@@ -368,7 +444,8 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ team, channel, onUploadSucces
         } else {
             // Offline: Speichere lokal
             if (onSaveOffline) {
-                await onSaveOffline(selectedFiles);
+                // Pass selectedSubFolder
+                await onSaveOffline(selectedFiles, selectedSubFolder);
             }
             setSuccess(`${selectedFiles.length} image(s) saved offline!`);
             setSelectedFiles([]);
@@ -380,6 +457,34 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ team, channel, onUploadSucces
             <Typography variant="h6" gutterBottom>
                 Bilder hochladen in Ordner "Bilder"
             </Typography>
+            
+            {/* NEW: Subfolder Selection UI */}
+            {isOnline && (
+                <FormControl fullWidth variant="outlined" sx={{ mb: 2 }} disabled={loadingFolders || subFolders.length === 0}>
+                    <InputLabel id="subfolder-select-label">Unterordner auswählen (Optional)</InputLabel>
+                    <Select
+                        labelId="subfolder-select-label"
+                        value={selectedSubFolder}
+                        onChange={(e: SelectChangeEvent) => setSelectedSubFolder(e.target.value as string)}
+                        label="Unterordner auswählen (Optional)"
+                    >
+                        <MenuItem value="">
+                            <em>Kein Unterordner (Direkt in "Bilder")</em>
+                        </MenuItem>
+                        {subFolders.map((folder) => (
+                            <MenuItem key={folder.id} value={folder.name}>
+                                {folder.name}
+                            </MenuItem>
+                        ))}
+                    </Select>
+                    {subFolders.length === 0 && !loadingFolders && (
+                        <Typography variant="caption" color="textSecondary" sx={{ ml: 1, mt: 0.5 }}>
+                            Keine Unterordner gefunden.
+                        </Typography>
+                    )}
+                </FormControl>
+            )}
+
             <input
                 type="file"
                 accept="image/*"

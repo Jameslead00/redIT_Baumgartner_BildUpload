@@ -31,6 +31,7 @@ export interface OfflinePost {
     imageUrls: string[];
     timestamp: number;
     mentions?: DBMentionUser[];
+    subFolder?: string; // Added subFolder field
 }
 
 export class OfflineDB extends Dexie {
