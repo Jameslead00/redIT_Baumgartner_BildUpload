@@ -15,11 +15,18 @@ export interface DBMentionUser {
     displayName: string;
 }
 
+export interface SubFolder {
+    id: string;
+    name: string;
+}
+
 export interface FavoriteTeam {
     id: string;
     displayName: string;
     channels: Channel[];
     members?: DBMentionUser[];
+    // NEW: Map channelId -> SubFolder[]
+    channelSubFolders?: { [channelId: string]: SubFolder[] };
 }
 
 export interface OfflinePost {
@@ -53,6 +60,13 @@ export class OfflineDB extends Dexie {
         // Dexie führt automatisch ein Upgrade durch
         this.version(2).stores({
             favoriteTeams: 'id, displayName, channels, members', 
+            posts: '++id, teamId, channelId, text, imageUrls, timestamp',
+            images: '++id, postId, file'
+        });
+
+        // Version 3 (neu): 'channelSubFolders' hinzufügen
+        this.version(3).stores({
+            favoriteTeams: 'id, displayName, channels, members, channelSubFolders', 
             posts: '++id, teamId, channelId, text, imageUrls, timestamp',
             images: '++id, postId, file'
         });

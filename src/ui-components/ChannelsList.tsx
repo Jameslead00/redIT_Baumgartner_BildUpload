@@ -4,6 +4,7 @@ import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import { loginRequest } from "../authConfig";
 import ImageUpload from "./ImageUpload";
 import { Grid, Card, CardActionArea, CardContent, Typography, Box } from "@mui/material";
+import { SubFolder } from '../db'; // Import SubFolder
 
 interface Team {
     id: string;
@@ -24,6 +25,7 @@ interface ChannelsListProps {
     isFavorite: boolean;
     cachedChannels?: Channel[];  // Neue Prop für gecachte Kanäle
     onSaveOffline?: (files: File[]) => void;  // Füge onSaveOffline Prop hinzu
+    cachedSubFolders?: { [channelId: string]: SubFolder[] }; // New Prop
 }
 
 const ChannelsList: React.FC<ChannelsListProps> = ({
@@ -34,7 +36,8 @@ const ChannelsList: React.FC<ChannelsListProps> = ({
     customText,
     isFavorite,
     cachedChannels = [],  // Default leer
-    onSaveOffline
+    onSaveOffline,
+    cachedSubFolders = {}, // Default empty
 }) => {
     const { instance, accounts } = useMsal();
     const account = useAccount(accounts[0] || {});
@@ -143,7 +146,9 @@ const ChannelsList: React.FC<ChannelsListProps> = ({
                     onUploadSuccess={onUploadSuccess}
                     onCustomTextChange={onCustomTextChange}
                     customText={customText}
-                    onSaveOffline={onSaveOffline}  // Übergebe onSaveOffline
+                    onSaveOffline={onSaveOffline}
+                    // Pass cached subfolders for this specific channel
+                    cachedSubFolders={cachedSubFolders[selectedChannel.id] || []}
                 />
             )}
         </Box>

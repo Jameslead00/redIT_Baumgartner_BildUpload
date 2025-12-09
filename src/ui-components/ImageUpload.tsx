@@ -9,6 +9,7 @@ import { Delete as DeleteIcon } from "@mui/icons-material";
 import { db } from '../db';
 import { logToSharePoint } from "../utils/Logger";
 import { UploadProgress } from "./UploadProgress";
+import { SubFolder } from '../db'; // Import shared interface
 
 export interface Team {
     id: string;
@@ -28,6 +29,7 @@ interface ImageUploadProps {
     customText: string;
     // ÄNDERUNG: Callback Signatur erweitert um subFolder
     onSaveOffline?: (files: File[], subFolder: string, onProgress?: (current: number, total: number) => void) => Promise<void> | void;
+    cachedSubFolders?: SubFolder[]; // New Prop
 }
 
 interface FileData {
@@ -220,13 +222,15 @@ export const encodeFilesToBase64 = async (files: File[]): Promise<string[]> => {
     return base64Images;
 };
 
-// Interface for Subfolders
-interface SubFolder {
-    id: string;
-    name: string;
-}
-
-const ImageUpload: React.FC<ImageUploadProps> = ({ team, channel, onUploadSuccess, onCustomTextChange, customText, onSaveOffline }) => {
+const ImageUpload: React.FC<ImageUploadProps> = ({ 
+    team, 
+    channel, 
+    onUploadSuccess, 
+    onCustomTextChange, 
+    customText, 
+    onSaveOffline,
+    cachedSubFolders = [] // Default empty
+}) => {
     const { instance, accounts } = useMsal();
     const account = useAccount(accounts[0] || {});
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -247,11 +251,18 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ team, channel, onUploadSucces
     // NEW: Fetch Subfolders when Channel changes
     useEffect(() => {
         const fetchSubFolders = async () => {
-            if (!account || !isOnline) return;
+            setSubFolders([]);
+            setSelectedSubFolder(""); 
+
+            // Offline or no account: Use cached subfolders
+            if (!account || !isOnline) {
+                if (cachedSubFolders && cachedSubFolders.length > 0) {
+                    setSubFolders(cachedSubFolders);
+                }
+                return;
+            }
             
             setLoadingFolders(true);
-            setSubFolders([]);
-            setSelectedSubFolder(""); // Reset selection
 
             const request = { ...loginRequest, account };
 
@@ -271,7 +282,6 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ team, channel, onUploadSucces
                 const folderPath = getFolderPath(channel.displayName); // e.g., "General/Bilder"
 
                 // 3. List Children of "Bilder"
-                // We use a specific query to only get folders
                 const childrenResponse = await fetch(
                     `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${folderPath}:/children?filter=folder ne null&select=id,name`, 
                     { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -283,17 +293,18 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ team, channel, onUploadSucces
                 } else if (childrenResponse.status === 404) {
                     // "Bilder" folder doesn't exist yet, which is fine.
                     console.log("Bilder folder does not exist yet.");
+                    setSubFolders([]); // Explicitly set to empty
                 }
             } catch (err) {
                 console.error("Error fetching subfolders:", err);
-                // We don't block the UI, just show no subfolders
+                setSubFolders([]); // Set to empty on error
             } finally {
                 setLoadingFolders(false);
             }
         };
 
         fetchSubFolders();
-    }, [team.id, channel.displayName, account, isOnline, instance]);
+    }, [team.id, channel.displayName, account, isOnline, instance, cachedSubFolders]); // Add cachedSubFolders to deps
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files && event.target.files.length > 0) {
@@ -458,9 +469,9 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ team, channel, onUploadSucces
                 Bilder hochladen in Ordner "Bilder"
             </Typography>
             
-            {/* NEW: Subfolder Selection UI */}
-            {isOnline && (
-                <FormControl fullWidth variant="outlined" sx={{ mb: 2 }} disabled={loadingFolders || subFolders.length === 0}>
+            {/* FIX: Show if online (even if empty, to show "None found") OR if we have cached subfolders */}
+            {(isOnline || subFolders.length > 0) && (
+                <FormControl fullWidth variant="outlined" sx={{ mb: 2 }} disabled={loadingFolders || (subFolders.length === 0 && !isOnline)}>
                     <InputLabel id="subfolder-select-label">Unterordner auswählen (Optional)</InputLabel>
                     <Select
                         labelId="subfolder-select-label"
@@ -479,7 +490,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ team, channel, onUploadSucces
                     </Select>
                     {subFolders.length === 0 && !loadingFolders && (
                         <Typography variant="caption" color="textSecondary" sx={{ ml: 1, mt: 0.5 }}>
-                            Keine Unterordner gefunden.
+                            {isOnline ? "Keine Unterordner gefunden." : "Keine gecachten Unterordner verfügbar."}
                         </Typography>
                     )}
                 </FormControl>
