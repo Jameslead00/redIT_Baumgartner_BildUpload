@@ -20,7 +20,7 @@
             "node",
             "jest"
         ],
-        "jsx": "preserve",
+        "jsx": "react-jsx",
         "isolatedModules": true,
         "allowJs": true,
         "skipLibCheck": true,
