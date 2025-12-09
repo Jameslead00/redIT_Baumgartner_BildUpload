@@ -5,6 +5,7 @@ Eine moderne, responsive Web-App zur einfachen Erstellung von Posts in Microsoft
 ## Features
 * Microsoft Teams Integration: Authentifizierung via MSAL, Auswahl von Teams und Kanälen.
 * Bild-Upload: Hochladen von Bildern in den OneDrive-Ordner "Bilder" des Teams. Thumbnails werden für schnelle Vorschau generiert.
+* Unterordner-Auswahl: Optionales Auswählen eines Unterordners im "Bilder"-Verzeichnis für gezielte Uploads. (Hinweis: Der Ordner "Bilder" und die entsprechenden Unterordner müssen bereits im Kanal existieren).
 * Post-Erstellung: Erstellen von Posts mit Text und bis zu 4 Bildern in ausgewählten Kanälen (weitere Bilder werden hochgeladen, aber nicht im Post angezeigt).
 * Offline-Modus: Vollständige Vorbereitung von Posts offline, lokale Speicherung mit Dexie, halbautomatische Synchronisation bei Wiederverbindung.
 * Caching: Teams und Kanäle werden für Favoriten gecached, um Offline-Zugang zu ermöglichen. Erfolgreich hochgeladene Posts werden automatisch aus dem Cache entfernt.
@@ -41,12 +42,13 @@ Team und Kanal auswählen:
 
 2. Wähle ein Team aus der Liste (Favoriten werden gecached).
 3. Wähle einen Kanal.
+4. (Optional) Wähle einen Unterordner (Voraussetzung: Der Ordner "Bilder" und die Unterordner müssen bereits existieren).
 
 Bilder hochladen und Post erstellen:
 
-4. Wähle Bilder aus.
-5. Füge optional Text hinzu.
-6. Klicke "Datei(en) hochladen" – Bilder werden gecached und automatisch hochgeladen/gepostet (nur die ersten 4 Bilder erscheinen im Teams-Post; Rest wird nur hochgeladen).
+5. Wähle Bilder aus.
+6. Füge optional Text hinzu.
+7. Klicke "Datei(en) hochladen" – Bilder werden gecached und automatisch hochgeladen/gepostet.
 
 ## Offline-Modus:
 
@@ -58,7 +60,7 @@ Offline-Funktionalität
 
 * Speicherung: Posts, Bilder und Metadaten werden in IndexedDB (Dexie) gespeichert.
 * Sync: Bei Online/Login werden Bilder zu OneDrive hochgeladen und Posts in Teams erstellt (automatisch für Online, manuell für Offline).
-* Caching: Favorisierte Teams und Kanäle sind offline verfügbar. Erfolgreich hochgeladene Posts werden aus dem Cache entfernt.
+* Caching: Favorisierte Teams, Kanäle und Unterordner sind offline verfügbar. Erfolgreich hochgeladene Posts werden aus dem Cache entfernt.
 * Hinweise: App zeigt Warnungen für Offline-Status und erfordert Text für Offline-Speicherung.
 
 ## Deployment
