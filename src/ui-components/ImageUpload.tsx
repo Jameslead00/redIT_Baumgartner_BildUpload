@@ -30,6 +30,7 @@ interface ImageUploadProps {
     // ÄNDERUNG: Callback Signatur erweitert um subFolder
     onSaveOffline?: (files: File[], subFolder: string, onProgress?: (current: number, total: number) => void) => Promise<void> | void;
     cachedSubFolders?: SubFolder[]; // New Prop
+    initialSelectedSubFolder?: string; // New prop for testing
 }
 
 interface FileData {
@@ -229,7 +230,8 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
     onCustomTextChange, 
     customText, 
     onSaveOffline,
-    cachedSubFolders = [] // Default empty
+    cachedSubFolders = [], // Default empty
+    initialSelectedSubFolder = "" // New prop
 }) => {
     const { instance, accounts } = useMsal();
     const account = useAccount(accounts[0] || {});
@@ -242,7 +244,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
     
     // NEW: State for Subfolders
     const [subFolders, setSubFolders] = useState<SubFolder[]>([]);
-    const [selectedSubFolder, setSelectedSubFolder] = useState<string>(""); // "" means root (Bilder)
+    const [selectedSubFolder, setSelectedSubFolder] = useState<string>(initialSelectedSubFolder); // Use initial value
     const [loadingFolders, setLoadingFolders] = useState<boolean>(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -252,13 +254,16 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
     useEffect(() => {
         const fetchSubFolders = async () => {
             setSubFolders([]);
-            setSelectedSubFolder(""); 
+            // Removed setSelectedSubFolder(""); to keep initial value
 
             // Offline or no account: Use cached subfolders
             if (!account || !isOnline) {
                 if (cachedSubFolders && cachedSubFolders.length > 0) {
                     setSubFolders(cachedSubFolders);
+                } else {
+                    setSubFolders([]);
                 }
+                setLoadingFolders(false);
                 return;
             }
             

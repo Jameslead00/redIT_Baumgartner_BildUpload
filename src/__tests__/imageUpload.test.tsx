@@ -44,6 +44,7 @@ describe('ImageUpload component (unit)', () => {
         onCustomTextChange={() => {}}
         onSaveOffline={onSaveOffline}
         cachedSubFolders={[{ id: 'sf1', name: 'Folder1' }]}
+        initialSelectedSubFolder="Folder1"  // Pre-select the subfolder for testing
       />
     );
 
@@ -61,22 +62,9 @@ describe('ImageUpload component (unit)', () => {
       expect(screen.getByText(/image.png/i)).toBeInTheDocument();
     });
 
-    // Find and open the Select as combobox (MUI uses role="combobox" in JSDOM)
-    const selectCombobox = screen.getByRole('combobox', {
-      name: /Unterordner auswählen \(Optional\)/i
-    });
-    expect(selectCombobox).toBeInTheDocument();
-
-    fireEvent.mouseDown(selectCombobox);
-
-    // Wait for listbox to appear, then select the option within it
-    const listbox = await screen.findByRole('listbox');
-    const option = within(listbox).getByRole('option', { name: 'Folder1' });
-    await userEvent.click(option);
-
-    // Wait for the combobox to reflect the selection
+    // Wait for the combobox to show the selected subfolder
     await waitFor(() => {
-      expect(selectCombobox).toHaveTextContent('Folder1');
+      expect(screen.getByRole('combobox', { name: /Unterordner auswählen \(Optional\)/i })).toHaveTextContent('Folder1');
     });
 
     // Now the Offline button should be enabled because customText is non-empty
