@@ -23,6 +23,21 @@ class MockImage {
 }
 (global as any).Image = MockImage;
 
+// Minimal HTMLCanvasElement mock for JSDOM
+// Override canvas context and toBlob for JSDOM tests
+(HTMLCanvasElement.prototype as any).getContext = function() {
+    return {
+      drawImage: jest.fn(),
+      fillRect: jest.fn(),
+      getImageData: jest.fn(() => ({ data: [] })),
+      putImageData: jest.fn(),
+    };
+  };
+
+(HTMLCanvasElement.prototype as any).toBlob = function(callback: (blob: Blob | null) => void) {
+    callback(new Blob([''], { type: 'image/jpeg' }));
+  };
+
 // Allow overriding navigator.onLine in tests (preserve existing navigator properties)
 if (typeof window.navigator === 'object' && window.navigator !== null) {
   // Define a configurable/writable property `onLine` instead of replacing `navigator` completely

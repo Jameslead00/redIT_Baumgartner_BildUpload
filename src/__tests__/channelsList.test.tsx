@@ -12,7 +12,11 @@ jest.mock("@azure/msal-react", () => ({
 import * as msal from "@azure/msal-react";
 
 jest.mock("../ui-components/ImageUpload", () => {
-  return () => <div data-testid="mock-imageupload">ImageUpload</div>;
+  return (props: any) => (
+    <div data-testid="mock-imageupload" data-cached-subfolders={JSON.stringify(props.cachedSubFolders || [])}>
+      ImageUpload
+    </div>
+  );
 });
 
 describe("ChannelsList component", () => {

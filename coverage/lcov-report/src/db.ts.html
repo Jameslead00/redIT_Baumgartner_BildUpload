@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/7</span>
+                <span class='fraction'>7/7</span>
             </div>
         
             
@@ -37,16 +37,16 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/1</span>
+                <span class='fraction'>1/1</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/7</span>
+                <span class='fraction'>7/7</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line low'></div>
+    <div class='status-line high'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -138,7 +138,7 @@
 <a name='L73'></a><a href='#L73'>73</a>
 <a name='L74'></a><a href='#L74'>74</a>
 <a name='L75'></a><a href='#L75'>75</a>
-<a name='L76'></a><a href='#L76'>76</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L76'></a><a href='#L76'>76</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -181,16 +181,16 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -198,14 +198,14 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -213,7 +213,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js"><span class="cstat-no" title="statement not covered" >import Dexie from 'dexie';</span>
+<span class="cline-any cline-yes">1x</span></td><td class="text"><pre class="prettyprint lang-js">import Dexie from 'dexie';
 &nbsp;
 export interface Team {
     id: string;
@@ -256,16 +256,16 @@ export interface OfflinePost {
     subFolder?: string; // Added subFolder field
 }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >export class O</span>fflineDB extends Dexie {
+export class OfflineDB extends Dexie {
     favoriteTeams!: Dexie.Table&lt;FavoriteTeam, string&gt;;
     posts!: Dexie.Table&lt;OfflinePost, number&gt;;
     images!: Dexie.Table&lt;{ id?: number; postId: number; file: File }, number&gt;;
 &nbsp;
-<span class="fstat-no" title="function not covered" >    constructor() {</span>
-<span class="cstat-no" title="statement not covered" >        super('offlineData');</span>
+    constructor() {
+        super('offlineData');
         
         // Version 1 (alt)
-<span class="cstat-no" title="statement not covered" >        this.version(1).stores({</span>
+        this.version(1).stores({
             favoriteTeams: 'id, displayName, channels',
             posts: '++id, teamId, channelId, text, imageUrls, timestamp',
             images: '++id, postId, file'
@@ -273,14 +273,14 @@ export interface OfflinePost {
 &nbsp;
         // Version 2 (neu): 'members' zum Index hinzufügen
         // Dexie führt automatisch ein Upgrade durch
-<span class="cstat-no" title="statement not covered" >        this.version(2).stores({</span>
+        this.version(2).stores({
             favoriteTeams: 'id, displayName, channels, members', 
             posts: '++id, teamId, channelId, text, imageUrls, timestamp',
             images: '++id, postId, file'
         });
 &nbsp;
         // Version 3 (neu): 'channelSubFolders' hinzufügen
-<span class="cstat-no" title="statement not covered" >        this.version(3).stores({</span>
+        this.version(3).stores({
             favoriteTeams: 'id, displayName, channels, members, channelSubFolders', 
             posts: '++id, teamId, channelId, text, imageUrls, timestamp',
             images: '++id, postId, file'
@@ -288,14 +288,14 @@ export interface OfflinePost {
     }
 }
 &nbsp;
-export const <span class="cstat-no" title="statement not covered" >db = new OfflineDB();</span></pre></td></tr></table></pre>
+export const db = new OfflineDB();</pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->
             </div><!-- /wrapper -->
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-12-10T12:39:22.787Z
+                at 2025-12-11T12:22:59.640Z
             </div>
         <script src="../prettify.js"></script>
         <script>

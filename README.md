@@ -13,12 +13,14 @@ Eine moderne, responsive Web-App zur einfachen Erstellung von Posts in Microsoft
 * Mobile-Unterstützung: MSAL verwendet Redirect für bessere Kompatibilität auf Mobilgeräten.
 
 ## Technologien
-* Frontend: React 18, TypeScript, Material-UI (MUI)
-* Authentifizierung: Microsoft Authentication Library (MSAL) für Azure AD
+* Frontend: React 19.2.1, TypeScript 4.9.4, Material-UI (MUI) — `@mui/material` 5.10.17, `@mui/icons-material` 5.10.16, `@emotion/react` & `@emotion/styled` 11.10.5
+* Authentifizierung: Microsoft Authentication Library (MSAL) — `@azure/msal-browser` 4.0.0, `@azure/msal-react` 3.0.0
 * API: Microsoft Graph API für Teams, Kanäle, Mitglieder und OneDrive
-* Offline-Speicherung: Dexie (IndexedDB)
-* Build-Tool: Create React App, npm
-* Hosting: Azure Static Web Apps (empfohlen), GitHub Pages (alternativ)
+* Offline-Speicherung: Dexie 4.2.1 (IndexedDB)
+* Router: `react-router-dom` 6.7.0
+* Build-Tool & Scripts: Create React App (`react-scripts` 5.0.1), npm
+* Dev & Test: Jest 29.5.0, `@testing-library/react` 16.3.0, `@testing-library/jest-dom` 6.9.1, `@testing-library/user-event` 14.6.1, MSW 2.12.4, Puppeteer 24.32.1
+* PWA & Deploy: Workbox (`workbox-cli` 7.3.0, `workbox-webpack-plugin` 7.3.0), `gh-pages` 6.3.0
 * CI/CD: Azure DevOps Pipelines
 
 ## Voraussetzungen
