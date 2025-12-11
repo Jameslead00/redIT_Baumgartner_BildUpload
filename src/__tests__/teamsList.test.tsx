@@ -1,6 +1,6 @@
 // src/__tests__/teamsList.test.tsx
 import React from "react";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import '@testing-library/jest-dom';
 import TeamsList from "../ui-components/TeamsList";
@@ -12,11 +12,19 @@ jest.mock("@azure/msal-react", () => ({
 }));
 import * as msal from "@azure/msal-react";
 
+// Mock PostMessage component function
+jest.mock('../ui-components/PostMessage', () => ({
+  postMessageToChannel: jest.fn(),
+}));
+import { postMessageToChannel } from '../ui-components/PostMessage';
+
 // Mock ChannelsList child to avoid heavy operations; just render a placeholder
 jest.mock("../ui-components/ChannelsList", () => {
   return {
     __esModule: true,
-    default: (props: any) => (
+    default: (props: any) => {
+      (global as any).__lastChannelsListProps = props;
+      return (
       <div data-testid="mock-channels" data-team={props?.team?.id ?? ""}>
         {/* Expose a test button to simulate onSaveOffline usage */}
         <button
@@ -37,8 +45,23 @@ jest.mock("../ui-components/ChannelsList", () => {
         >
           Simulate Save
         </button>
+        {/* Expose button to simulate upload success */}
+        <button
+            data-testid="simulate-upload-success"
+            onClick={() => {
+                if (props.onUploadSuccess) {
+                    props.onUploadSuccess(['https://url'], [new File(['a'], 'a.png', { type: 'image/png' })]);
+                }
+                if (props.onCustomTextChange) {
+                    props.onCustomTextChange('Test Message');
+                }
+            }}
+        >
+            Simulate Upload Success
+        </button>
       </div>
-    )
+      );
+    }
   };
 });
 
@@ -50,7 +73,8 @@ jest.mock("../db", () => {
   const fakeGet = jest.fn().mockResolvedValue(undefined);
   const fakeWhere = jest.fn(() => ({
     equals: jest.fn(() => ({
-      toArray: jest.fn().mockResolvedValue([])
+      toArray: jest.fn().mockResolvedValue([]),
+      delete: jest.fn().mockResolvedValue(undefined) // Ensure delete is mocked for where().equals().delete()
     }))
   }));
 
@@ -69,7 +93,8 @@ jest.mock("../db", () => {
         delete: jest.fn().mockResolvedValue(undefined),
       },
       images: {
-        where: fakeWhere
+        where: fakeWhere,
+        add: jest.fn().mockResolvedValue(1)
       }
     },
     // export types used by TeamsList runtime (not strictly needed but keeps TypeScript happy)
@@ -344,56 +369,6 @@ describe("TeamsList component", () => {
     }, { timeout: 3000 });
   });
 
-  test.skip('syncOfflinePosts posts cached posts and cleans up DB', async () => {
-    const dbModule = require('../db');
-    // Provide one offline post
-    const post = { id: 1, teamId: 't1', channelId: 'c1', channelDisplayName: 'General', text: 'hello', imageUrls: [], timestamp: Date.now(), subFolder: '' };
-    dbModule.db.posts.toArray.mockResolvedValue([post]);
-    // also set joinedTeams to [] to avoid `teams` undefined
-    // default fetch: return safe shape for any graph call
-    (global as any).fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ value: [] }) });
-    // override certain endpoints for site and drive content to provide expected values
-    (global as any).fetch.mockImplementation((url: string) => {
-      if (url.includes('/me/joinedTeams')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }) });
-      if (url.includes('/sites/root')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'siteId' }) });
-      if (url.includes('/drive') && url.includes('/children')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }) });
-      if (url.includes('/drive/root:') && url.includes('/content')) return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
-      if (url.includes('/drive/root:') && !url.includes('/content')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ webUrl: 'https://weburl' }) });
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }) });
-    });
-    // db.images.where().equals().toArray() should return one image
-    const imageFile = new File(['abc'], 'img.png', { type: 'image/png' });
-    dbModule.db.images.where.mockReturnValue({ equals: jest.fn(() => ({ toArray: jest.fn().mockResolvedValue([{ id: 1, postId: 1, file: imageFile }]), delete: jest.fn().mockResolvedValue(undefined) })) });
-
-    (msal.useMsal as jest.Mock).mockReturnValue({ instance: { acquireTokenSilent: jest.fn().mockResolvedValue({ accessToken: 'mock-token' }) }, accounts: [{}] });
-    (msal.useAccount as jest.Mock).mockReturnValue({ name: 'User', username: 'u@test' });
-
-    // Mock fetch to return site id and upload endpoints
-    (global as any).fetch = jest.fn().mockImplementation((url: string) => {
-      if (url.includes('/sites/root')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'siteId' }) });
-      if (url.includes('/drive') && url.includes('/children')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }) });
-      if (url.includes('/drive/root:') && url.includes('/content')) return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
-      if (url.includes('/drive/root:') && !url.includes('/content')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ webUrl: 'https://weburl' }) });
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
-    });
-
-    // Spy on postMessageToChannel
-    const pmc = jest.spyOn(require('../ui-components/PostMessage'), 'postMessageToChannel').mockResolvedValue(undefined as any);
-
-    render(<TeamsList />);
-
-    // Wait for offline posts to appear and sync button to render
-    const button = await screen.findByRole('button', { name: /Upload \(1\) cached post\(s\)/i });
-    expect(button).toBeInTheDocument();
-    await userEvent.click(button);
-
-    // Wait for postMessageToChannel and db.posts.delete to be called
-    await waitFor(() => {
-      expect(pmc).toHaveBeenCalled();
-      expect(dbModule.db.posts.delete).toHaveBeenCalledWith(1);
-    }, { timeout: 3000 });
-  });
-
   test('fetches members for selected team and shows mention options', async () => {
     const fakeMsalInstance = {
       acquireTokenSilent: jest.fn().mockResolvedValue({ accessToken: 'mock-token' })
@@ -427,31 +402,184 @@ describe("TeamsList component", () => {
     expect(screen.getByPlaceholderText(/Namen eingeben/i) || mentionInput).toBeDefined();
   });
 
-  test('saveOfflinePost writes to db and adds images via ChannelsList onSaveOffline', async () => {
+  test('saveOfflinePost writes to db and adds images via ChannelsList onSaveOffline (offline)', async () => {
     const dbModule = require('../db');
-    dbModule.db.posts.toArray.mockResolvedValue([]);
-    dbModule.db.images.where.mockReturnValue({ equals: jest.fn(() => ({ toArray: jest.fn().mockResolvedValue([]), delete: jest.fn().mockResolvedValue(undefined) })) });
-    (msal.useMsal as jest.Mock).mockReturnValue({ instance: { acquireTokenSilent: jest.fn().mockResolvedValue({ accessToken: 'mock-token' }) }, accounts: [{}] });
-    (msal.useAccount as jest.Mock).mockReturnValue({ name: 'User', username: 'u@test' });
-    (global as any).fetch = jest.fn().mockImplementation((url: string) => {
-      if (url.includes('/me/joinedTeams')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: teams }) });
-      if (url.includes('/channels')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [{ id: 'c1', displayName: 'General' }] }) });
-      if (url.includes('/sites/root')) return Promise.resolve({ ok: true, json: async () => ({ id: 'siteId' }) });
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }) });
-    });
+    jest.clearAllMocks();
+    
+    (msal.useMsal as jest.Mock).mockReturnValue({ instance: { acquireTokenSilent: jest.fn() }, accounts: [] });
+    (msal.useAccount as jest.Mock).mockReturnValue(null);
+
+    dbModule.db.favoriteTeams.toArray.mockResolvedValue([{ id: 't1', displayName: 'Team One' }]);
+
+    Object.defineProperty(window.navigator, 'onLine', { value: false, configurable: true });
 
     render(<TeamsList />);
+
     const input = await screen.findByLabelText(/Search teams/i);
     await userEvent.click(input);
     await userEvent.type(input, 'Team One');
     await userEvent.keyboard('{ArrowDown}{Enter}');
 
-    // Click the simulate button in our mocked ChannelsList
-    const simBtn = await screen.findByTestId('simulate-save');
-    await userEvent.click(simBtn);
+    let props = (global as any).__lastChannelsListProps;
+    expect(props).toBeDefined();
+    const { act } = require('@testing-library/react');
+    await act(async () => {
+      props.onChannelSelect({ id: 'c1', displayName: 'General' });
+    });
+    await new Promise((r) => setTimeout(r, 0));
+    
+    props = (global as any).__lastChannelsListProps;
+
+    await act(async () => {
+      await props.onSaveOffline([new File(['a'], 'a.png', { type: 'image/png' })], '');
+    });
 
     await waitFor(() => {
       expect(dbModule.db.posts.add).toHaveBeenCalled();
+    });
+    
+    Object.defineProperty(window.navigator, 'onLine', { value: true, configurable: true });
+  });
+
+  test('saveOfflinePost syncs immediately when online and account present', async () => {
+    const dbModule = require('../db');
+    jest.clearAllMocks();
+    
+    dbModule.db.posts.toArray.mockResolvedValue([]);
+    dbModule.db.posts.add.mockResolvedValue(123);
+    dbModule.db.images.where.mockReturnValue({ 
+        equals: jest.fn(() => ({ 
+            toArray: jest.fn().mockResolvedValue([{ file: new File(['a'], 'a.png', { type: 'image/png' }) }]) 
+        })) 
+    });
+    
+    (msal.useMsal as jest.Mock).mockReturnValue({ instance: { acquireTokenSilent: jest.fn().mockResolvedValue({ accessToken: 'mock-token' }) }, accounts: [{}] });
+    (msal.useAccount as jest.Mock).mockReturnValue({ name: 'User', username: 'u@test' });
+
+    (global as any).fetch = jest.fn().mockImplementation((input: RequestInfo) => {
+      const url = typeof input === 'string' ? input : (input as any).url;
+      if (url.includes('/me/joinedTeams')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: teams }) });
+      if (url.includes('/sites/root')) return Promise.resolve({ ok: true, json: async (): Promise<{ id: string }> => ({ id: 'siteId' }) });
+      if (url.includes('/drive') && url.includes('/children')) return Promise.resolve({ ok: true, json: async (): Promise<{ value: any[] }> => ({ value: [] }) });
+      if (url.includes('/drive/root:') && url.includes('/content')) return Promise.resolve({ ok: true, json: async (): Promise<{}> => ({}) });
+      if (url.includes('/drive/root:') && !url.includes('/content')) return Promise.resolve({ ok: true, json: async (): Promise<{ webUrl: string }> => ({ webUrl: 'https://weburl' }) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }) });
+    });
+
+    (postMessageToChannel as jest.Mock).mockResolvedValue(undefined);
+
+    render(<TeamsList />);
+
+    const input = await screen.findByLabelText(/Search teams/i);
+    await userEvent.click(input);
+    await userEvent.type(input, 'Team One');
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+
+    let props = (global as any).__lastChannelsListProps;
+    expect(props).toBeDefined();
+    const { act } = require('@testing-library/react');
+    await act(async () => {
+      props.onChannelSelect({ id: 'c1', displayName: 'General' });
+    });
+    await new Promise((r) => setTimeout(r, 0));
+    
+    props = (global as any).__lastChannelsListProps;
+
+    await act(async () => {
+      await props.onSaveOffline([new File(['a'], 'a.png', { type: 'image/png' })], '');
+    });
+
+    await waitFor(() => {
+      expect(postMessageToChannel).toHaveBeenCalled();
+      expect(dbModule.db.posts.delete).toHaveBeenCalled();
+    }, { timeout: 3000 });
+  });
+
+  test('syncOfflinePosts uploads cached posts when button clicked', async () => {
+    const dbModule = require('../db');
+    jest.clearAllMocks();
+
+    // Mock cached posts
+    const cachedPosts = [{ id: 1, teamId: 't1', channelId: 'c1', text: 'Offline Post', imageUrls: [] as string[] }];
+    dbModule.db.posts.toArray.mockResolvedValue(cachedPosts);
+    dbModule.db.images.where.mockReturnValue({ 
+        equals: jest.fn(() => ({ 
+            toArray: jest.fn().mockResolvedValue([]) 
+        })) 
+    });
+
+    (msal.useMsal as jest.Mock).mockReturnValue({ instance: { acquireTokenSilent: jest.fn().mockResolvedValue({ accessToken: 'mock-token' }) }, accounts: [{}] });
+    (msal.useAccount as jest.Mock).mockReturnValue({ name: 'User', username: 'u@test' });
+
+    (global as any).fetch = jest.fn().mockImplementation((input: RequestInfo) => {
+        const url = typeof input === 'string' ? input : (input as any).url;
+        if (url.includes('/me/joinedTeams')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: teams }) });
+        if (url.includes('/sites/root')) return Promise.resolve({ ok: true, json: async (): Promise<{ id: string }> => ({ id: 'siteId' }) });
+        if (url.includes('/drive') && url.includes('/children')) return Promise.resolve({ ok: true, json: async (): Promise<{ value: any[] }> => ({ value: [] }) });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }) });
+    });
+
+    (postMessageToChannel as jest.Mock).mockResolvedValue(undefined);
+
+    render(<TeamsList />);
+
+    // Wait for posts to load
+    await waitFor(() => expect(dbModule.db.posts.toArray).toHaveBeenCalled());
+
+    // Find Sync Button
+    const syncButton = await screen.findByText(/Upload \(1\) cached post\(s\)/i);
+    await userEvent.click(syncButton);
+
+    await waitFor(() => {
+        expect(postMessageToChannel).toHaveBeenCalled();
+        expect(dbModule.db.posts.delete).toHaveBeenCalledWith(1);
+    });
+  });
+
+  test('handlePostToChannel posts message directly when online', async () => {
+    (msal.useMsal as jest.Mock).mockReturnValue({ instance: { acquireTokenSilent: jest.fn().mockResolvedValue({ accessToken: 'mock-token' }) }, accounts: [{}] });
+    (msal.useAccount as jest.Mock).mockReturnValue({ name: 'User', username: 'u@test' });
+
+    (global as any).fetch.mockImplementation((input: RequestInfo) => {
+        const url = typeof input === 'string' ? input : (input as any).url;
+        if (url.includes('/me/joinedTeams')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: teams }) });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }) });
+    });
+
+    (postMessageToChannel as jest.Mock).mockResolvedValue(undefined);
+
+    render(<TeamsList />);
+
+    // Select Team
+    const input = await screen.findByLabelText(/Search teams/i);
+    await userEvent.click(input);
+    await userEvent.type(input, 'Team One');
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+
+    // Select Channel via Mock
+    let props = (global as any).__lastChannelsListProps;
+    const { act } = require('@testing-library/react');
+    await act(async () => {
+      props.onChannelSelect({ id: 'c1', displayName: 'General' });
+    });
+    await new Promise((r) => setTimeout(r, 0));
+
+    // Simulate Upload Success (sets customText and imageUrls)
+    props = (global as any).__lastChannelsListProps;
+    await act(async () => {
+        // Trigger the simulate-upload-success button in mock
+        const btn = screen.getByTestId('simulate-upload-success');
+        btn.click();
+    });
+
+    // Find "Beitrag in Kanal posten" button
+    const postButton = await screen.findByText(/Beitrag in Kanal posten/i);
+    await userEvent.click(postButton);
+
+    await waitFor(() => {
+        expect(postMessageToChannel).toHaveBeenCalledWith(
+            'mock-token', 't1', 'c1', 'Test Message', ['https://url'], expect.any(Array), expect.any(Array)
+        );
     });
   });
 });

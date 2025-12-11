@@ -9,7 +9,7 @@ describe('MsGraphApiCall utils', () => {
 
   test('callMsGraph throws when no active account', async () => {
     // Provide a fake module with msalInstance
-    jest.mock('../index', () => ({ msalInstance: { getActiveAccount: () => null } }));
+    jest.mock('../index', () => ({ msalInstance: { getActiveAccount: (): null => null } }));
     // Need to re-require module to use mocked msalInstance
     const path = require.resolve('../utils/MsGraphApiCall');
     jest.resetModules();

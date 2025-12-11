@@ -231,7 +231,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
     customText, 
     onSaveOffline,
     cachedSubFolders = [], // Default empty
-    initialSelectedSubFolder = "" // New prop
+    initialSelectedSubFolder = "" // New prop for testing
 }) => {
     const { instance, accounts } = useMsal();
     const account = useAccount(accounts[0] || {});
@@ -456,6 +456,8 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
                     console.error(e);
                     setUploading(false);
                 }
+            } else {
+                await uploadImages();
             }
         } else {
             // Offline: Speichere lokal
