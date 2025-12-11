@@ -28,7 +28,7 @@ jobs:
           git config --global http.https://dev.azure.com.extraHeader "Authorization: Basic $B64_PAT"
 
           # Remote hinzufügen (ohne Token in der URL)
-          git remote add azure "https://$AZURE_REPO_URL"
+          git remote add azure "https://git:$AZURE_REPO_URL"
           
           echo "Pushing to Azure Repo..."
           git push azure --all --force
