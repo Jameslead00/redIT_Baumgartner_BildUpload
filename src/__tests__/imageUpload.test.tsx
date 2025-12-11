@@ -24,7 +24,7 @@ describe('ImageUpload component (unit)', () => {
     (global as any).fetch = jest.fn().mockImplementation((input: RequestInfo) => {
       const url = typeof input === 'string' ? input : ((input as any)?.url ?? '');
       console.log('[default fetch] ' + url);
-      return Promise.resolve({ ok: true, json: async (): Promise<any> => ({ id: 'site', value: [] }) });
+      return Promise.resolve({ ok: true, json: async (): Promise<{ id: string; value: any[] }> => ({ id: 'site', value: [] }) });
     });
     
     // Mock heavy DOM/canvas-based image ops
@@ -73,7 +73,7 @@ describe('ImageUpload component (unit)', () => {
       
       // Match Site ID call: /groups/{id}/sites/root
       if (url.includes('/groups/') && url.includes('/sites/root')) {
-        return Promise.resolve({ ok: true, json: async () => ({ id: 'site' }) });
+        return Promise.resolve({ ok: true, json: async (): Promise<{ id: string }> => ({ id: 'site' }) });
       }
       // Match Children/Subfolders call
       if (url.includes('/children')) {
@@ -180,14 +180,14 @@ describe('ImageUpload component (unit)', () => {
       
       // Match Site ID call
       if (url.includes('/groups/') && url.includes('/sites/root')) {
-        return Promise.resolve({ ok: true, json: async () => ({ id: 'siteId' }) });
+        return Promise.resolve({ ok: true, json: async (): Promise<{ id: string }> => ({ id: 'siteId' }) });
       }
       // Match Children call
       if (url.includes('/children')) {
-        return Promise.resolve({ ok: true, json: async () => ({ value: [] }) });
+        return Promise.resolve({ ok: true, json: async (): Promise<{ value: any[] }> => ({ value: [] }) });
       }
       // Return some generic OK response with both id and value to avoid failures
-      return Promise.resolve({ ok: true, json: async () => ({ id: 'site', value: [] }) });
+      return Promise.resolve({ ok: true, json: async (): Promise<{ id: string; value: any[] }> => ({ id: 'site', value: [] }) });
     });
 
     render(
@@ -231,7 +231,7 @@ describe('ImageUpload component (unit)', () => {
 
       // Match Site ID call
       if (url.includes('/groups/') && url.includes('/sites/root')) {
-          return Promise.resolve({ ok: true, json: async () => ({ id: 'siteId' }) });
+          return Promise.resolve({ ok: true, json: async (): Promise<{ id: string }> => ({ id: 'siteId' }) });
       }
       // Match Folder Check (GET) -> 404 Not Found
       // Note: checkFolderExists checks for response.ok
@@ -240,7 +240,7 @@ describe('ImageUpload component (unit)', () => {
       }
       // Match Create Folder (POST)
       if (method === 'POST' && url.includes('/children')) {
-          return Promise.resolve({ ok: true, json: async () => ({}) });
+          return Promise.resolve({ ok: true, json: async (): Promise<{}> => ({}) });
       }
       // Match Upload Content (PUT)
       if (method === 'PUT' && url.includes('/content')) {
@@ -248,10 +248,10 @@ describe('ImageUpload component (unit)', () => {
       }
       // Match Get WebUrl (GET item after upload)
       if (method === 'GET' && url.includes('imageupload.jpg')) {
-          return Promise.resolve({ ok: true, json: async () => ({ webUrl: 'https://weburl.small' }) });
+          return Promise.resolve({ ok: true, json: async (): Promise<{ webUrl: string }> => ({ webUrl: 'https://weburl.small' }) });
       }
       // Default fallback
-      return Promise.resolve({ ok: true, json: async (): Promise<{ value: [] }> => ({ value: [] }) });
+      return Promise.resolve({ ok: true, json: async (): Promise<{ value: any[] }> => ({ value: [] }) });
     });
 
     render(
@@ -303,29 +303,29 @@ describe('ImageUpload component (unit)', () => {
       const url = typeof input === 'string' ? input : (input as any).url;
       const method = init?.method || 'GET';
 
-      if (url.includes('/groups/') && url.includes('/sites/root')) return Promise.resolve({ ok: true, json: async () => ({ id: 'siteId' }) });
+      if (url.includes('/groups/') && url.includes('/sites/root')) return Promise.resolve({ ok: true, json: async (): Promise<{ id: string }> => ({ id: 'siteId' }) });
       
       // Create Upload Session
       if (url.includes('createUploadSession')) {
-          return Promise.resolve({ ok: true, json: async () => ({ uploadUrl: 'https://upload.url' }) });
+          return Promise.resolve({ ok: true, json: async (): Promise<{ uploadUrl: string }> => ({ uploadUrl: 'https://upload.url' }) });
       }
 
       // Finalize (GET item) - Check this BEFORE folder check because folder check is a substring of this
       if (method === 'GET' && url.includes('large.jpg')) {
-          return Promise.resolve({ ok: true, json: async () => ({ webUrl: 'https://weburl.large' }) });
+          return Promise.resolve({ ok: true, json: async (): Promise<{ webUrl: string }> => ({ webUrl: 'https://weburl.large' }) });
       }
 
       // Folder exists check
       if (url.includes('/drive/root:/General/Bilder')) {
-           return Promise.resolve({ ok: true, json: async () => ({}) }); 
+           return Promise.resolve({ ok: true, json: async (): Promise<{}> => ({}) }); 
       }
       
       // Upload Chunk
       if (url === 'https://upload.url') {
-          return Promise.resolve({ ok: true, json: async () => ({}) });
+          return Promise.resolve({ ok: true, json: async (): Promise<{}> => ({}) });
       }
 
-      return Promise.resolve({ ok: true, json: async () => ({ value: [] }) });
+      return Promise.resolve({ ok: true, json: async (): Promise<{ value: any[] }> => ({ value: [] }) });
     });
 
     render(
@@ -368,11 +368,11 @@ describe('ImageUpload component (unit)', () => {
 
     (global as any).fetch = jest.fn().mockImplementation((input: RequestInfo) => {
       const url = typeof input === 'string' ? input : (input as any).url;
-      if (url.includes('/groups/') && url.includes('/sites/root')) return Promise.resolve({ ok: true, json: async () => ({ id: 'siteId' }) });
+      if (url.includes('/groups/') && url.includes('/sites/root')) return Promise.resolve({ ok: true, json: async (): Promise<{ id: string }> => ({ id: 'siteId' }) });
       if (url.includes('/children')) {
-          return Promise.resolve({ ok: true, json: async () => ({ value: [{ id: 'sf1', name: 'SubFolder1', folder: {} }] }) });
+          return Promise.resolve({ ok: true, json: async (): Promise<{ value: any[] }> => ({ value: [{ id: 'sf1', name: 'SubFolder1', folder: {} }] }) });
       }
-      return Promise.resolve({ ok: true, json: async () => ({ value: [] }) });
+      return Promise.resolve({ ok: true, json: async (): Promise<{ value: any[] }> => ({ value: [] }) });
     });
 
     render(
@@ -408,13 +408,13 @@ describe('ImageUpload component (unit)', () => {
       const url = typeof input === 'string' ? input : (input as any).url;
       const method = init?.method || 'GET';
 
-      if (url.includes('/groups/') && url.includes('/sites/root')) return Promise.resolve({ ok: true, json: async () => ({ id: 'siteId' }) });
+      if (url.includes('/groups/') && url.includes('/sites/root')) return Promise.resolve({ ok: true, json: async (): Promise<{ id: string }> => ({ id: 'siteId' }) });
       // Folder check fails (404)
       if (method === 'GET' && url.includes('/drive/root:/General/Bilder')) return Promise.resolve({ ok: false, status: 404 });
       // Folder creation fails (500)
       if (method === 'POST' && url.includes('/children')) return Promise.resolve({ ok: false, status: 500 });
 
-      return Promise.resolve({ ok: true, json: async () => ({ value: [] }) });
+      return Promise.resolve({ ok: true, json: async (): Promise<{ value: any[] }> => ({ value: [] }) });
     });
 
     render(
