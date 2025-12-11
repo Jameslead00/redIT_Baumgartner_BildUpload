@@ -22,13 +22,14 @@ jobs:
           AZURE_TOKEN: ${{ secrets.AZURE_DEVOPS_TOKEN }}
           AZURE_REPO_URL: dev.azure.com/baumgartnerfenster/_git/RedIT
         run: |
-          # Konfiguriere Git, um den Token im Header zu senden (sicherer und robuster)
-          # Wir kodieren ":<TOKEN>" in Base64 für Basic Auth. -w 0 verhindert Zeilenumbrüche.
+          # 1. Wir kodieren das PAT und speichern es in der Git-Konfiguration
+          #    Dadurch weiß Git: "Wenn ich mit dev.azure.com spreche, nutze dieses Passwort."
           B64_PAT=$(printf ":%s" "$AZURE_TOKEN" | base64 -w 0)
           git config --global http.https://dev.azure.com.extraHeader "Authorization: Basic $B64_PAT"
 
-          # Remote hinzufügen (ohne Token in der URL)
-          git remote add azure "https://git:$AZURE_REPO_URL"
+          # 2. Wir fügen die Remote-URL hinzu.
+          #    WICHTIG: Hier darf KEIN Token und KEIN 'git:' mehr stehen. Nur die reine Adresse.
+          git remote add azure "https://$AZURE_REPO_URL"
           
           echo "Pushing to Azure Repo..."
           git push azure --all --force
