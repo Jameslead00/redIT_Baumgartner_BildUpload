@@ -21,6 +21,7 @@ jobs:
         env:
           AZURE_TOKEN: ${{ secrets.AZURE_DEVOPS_TOKEN }}
           AZURE_REPO_URL: dev.azure.com/baumgartnerfenster/_git/RedIT
+          USERNAME: james.leadbeater@redit.ch
         run: |
           # 1. Wir kodieren das PAT und speichern es in der Git-Konfiguration
           #    Dadurch weiß Git: "Wenn ich mit dev.azure.com spreche, nutze dieses Passwort."
@@ -29,7 +30,7 @@ jobs:
 
           # 2. Wir fügen die Remote-URL hinzu.
           #    WICHTIG: Hier darf KEIN Token und KEIN 'git:' mehr stehen. Nur die reine Adresse.
-          git remote add azure "https://$AZURE_REPO_URL"
+          git remote add azure "https://$USERNAME@$AZURE_REPO_URL"
           
           echo "Pushing to Azure Repo..."
           git push azure --all --force
