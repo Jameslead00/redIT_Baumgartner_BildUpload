@@ -24,7 +24,8 @@ jobs:
         run: |
           # Konfiguriere die Azure Remote URL mit dem Token für die Authentifizierung
           # Wir verwenden --force, um sicherzustellen, dass das Azure Repo exakt dem GitHub Repo entspricht
-          git remote add azure "https://$AZURE_TOKEN@$AZURE_REPO_URL"
+          # HINWEIS: Wir fügen 'git:' als Benutzername hinzu, damit das Token als Passwort interpretiert wird
+          git remote add azure "https://git:$AZURE_TOKEN@$AZURE_REPO_URL"
           
           echo "Pushing to Azure Repo..."
           git push azure --all --force
