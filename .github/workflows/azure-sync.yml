@@ -23,14 +23,16 @@ jobs:
           AZURE_REPO_URL: dev.azure.com/baumgartnerfenster/_git/RedIT
           USERNAME: james.leadbeater@redit.ch
         run: |
-          # 1. Wir kodieren das PAT und speichern es in der Git-Konfiguration
-          #    Dadurch weiß Git: "Wenn ich mit dev.azure.com spreche, nutze dieses Passwort."
-          B64_PAT=$(printf ":%s" "$AZURE_TOKEN" | base64 -w 0)
-          git config --global http.https://dev.azure.com.extraHeader "Authorization: Basic $B64_PAT"
+          # 1. Wir erstellen den Auth-Header mit BENUTZERNAME und TOKEN.
+          #    Format für Basic Auth ist "username:password".
+          #    Da wir das im Header machen, stört das '@' im Benutzernamen nicht.
+          B64_AUTH=$(printf "%s:%s" "$USERNAME" "$AZURE_TOKEN" | base64 -w 0)
+          
+          # 2. Wir setzen den Header global für Git.
+          git config --global http.extraHeader "Authorization: Basic $B64_AUTH"
 
-          # 2. Wir fügen die Remote-URL hinzu.
-          #    WICHTIG: Hier darf KEIN Token und KEIN 'git:' mehr stehen. Nur die reine Adresse.
-          git remote add azure "https://$USERNAME@$AZURE_REPO_URL"
+          # 3. Remote hinzufügen (SAUBERE URL ohne Benutzername)
+          git remote add azure "https://$AZURE_REPO_URL"
           
           echo "Pushing to Azure Repo..."
           git push azure --all --force
