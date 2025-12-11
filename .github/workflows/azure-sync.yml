@@ -1,0 +1,31 @@
+name: Sync to Azure Repo
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+      - test-agent
+  workflow_dispatch:
+
+jobs:
+  sync-to-azure:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push to Azure Repo
+        env:
+          AZURE_TOKEN: ${{ secrets.AZURE_DEVOPS_TOKEN }}
+          AZURE_REPO_URL: dev.azure.com/baumgartnerfenster/_git/RedIT
+        run: |
+          # Konfiguriere die Azure Remote URL mit dem Token für die Authentifizierung
+          # Wir verwenden --force, um sicherzustellen, dass das Azure Repo exakt dem GitHub Repo entspricht
+          git remote add azure "https://$AZURE_TOKEN@$AZURE_REPO_URL"
+          
+          echo "Pushing to Azure Repo..."
+          git push azure --all --force
+          git push azure --tags --force
