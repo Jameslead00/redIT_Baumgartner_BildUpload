@@ -12,6 +12,10 @@ class JsdomCustomEnvironment extends JsdomEnvironment {
     if (typeof config.testEnvironmentOptions.userAgent === 'undefined') {
       config.testEnvironmentOptions.userAgent = 'node';
     }
+    // localStorage/sessionStorage require a non-opaque origin (i.e., a real URL)
+    if (typeof config.testEnvironmentOptions.url === 'undefined') {
+      config.testEnvironmentOptions.url = 'http://localhost/';
+    }
 
     // Call parent constructor with the normalized config
     super(config, options);

@@ -4,7 +4,9 @@ module.exports = {
   testEnvironment: '<rootDir>/jest-environment-jsdom-custom.cjs',
   testEnvironmentOptions: {
     html: '<!DOCTYPE html>',
-    userAgent: 'node'
+    userAgent: 'node',
+    // Required for localStorage/sessionStorage in JSDOM (avoids opaque origin)
+    url: 'http://localhost/'
   },
   setupFilesAfterEnv: ['<rootDir>/src/setupTests.ts'],
   testMatch: [
