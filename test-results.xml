@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="jest tests" tests="91" failures="0" errors="0" time="21.925">
+  <testsuite name="TypeScript Sample Tests" errors="0" failures="0" skipped="0" timestamp="2025-12-12T14:34:23" time="9.824" tests="11">
+    <testcase classname="TeamsList component shows offline warning when navigator is offline or no account" name="TeamsList component shows offline warning when navigator is offline or no account" time="0.331">
+    </testcase>
+    <testcase classname="TeamsList component fetches joined teams and allows selecting a team (renders ChannelsList)" name="TeamsList component fetches joined teams and allows selecting a team (renders ChannelsList)" time="0.629">
+    </testcase>
+    <testcase classname="TeamsList component toggling favorite stores in DB and updates localStorage" name="TeamsList component toggling favorite stores in DB and updates localStorage" time="0.243">
+    </testcase>
+    <testcase classname="TeamsList component removes favorite when toggle off" name="TeamsList component removes favorite when toggle off" time="0.771">
+    </testcase>
+    <testcase classname="TeamsList component offline uses cached favorites for the Autocomplete" name="TeamsList component offline uses cached favorites for the Autocomplete" time="0.127">
+    </testcase>
+    <testcase classname="TeamsList component loadAndCacheDataForFavorites fetches channels/members/subfolders and calls put" name="TeamsList component loadAndCacheDataForFavorites fetches channels/members/subfolders and calls put" time="0.032">
+    </testcase>
+    <testcase classname="TeamsList component fetches members for selected team and shows mention options" name="TeamsList component fetches members for selected team and shows mention options" time="0.807">
+    </testcase>
+    <testcase classname="TeamsList component saveOfflinePost writes to db and adds images via ChannelsList onSaveOffline (offline)" name="TeamsList component saveOfflinePost writes to db and adds images via ChannelsList onSaveOffline (offline)" time="0.483">
+    </testcase>
+    <testcase classname="TeamsList component saveOfflinePost syncs immediately when online and account present" name="TeamsList component saveOfflinePost syncs immediately when online and account present" time="0.554">
+    </testcase>
+    <testcase classname="TeamsList component syncOfflinePosts uploads cached posts when button clicked" name="TeamsList component syncOfflinePosts uploads cached posts when button clicked" time="0.056">
+    </testcase>
+    <testcase classname="TeamsList component handlePostToChannel posts message directly when online" name="TeamsList component handlePostToChannel posts message directly when online" time="0.772">
+    </testcase>
+  </testsuite>
+  <testsuite name="TypeScript Sample Tests" errors="0" failures="0" skipped="0" timestamp="2025-12-12T14:34:33" time="2.853" tests="7">
+    <testcase classname="ImageUpload component (unit) Offline save invokes onSaveOffline with selected subfolder and files" name="ImageUpload component (unit) Offline save invokes onSaveOffline with selected subfolder and files" time="0.267">
+    </testcase>
+    <testcase classname="ImageUpload component (unit) selecting and removing files updates UI accordingly" name="ImageUpload component (unit) selecting and removing files updates UI accordingly" time="0.14">
+    </testcase>
+    <testcase classname="ImageUpload component (unit) handleUpload online calls onSaveOffline when onSaveOffline provided" name="ImageUpload component (unit) handleUpload online calls onSaveOffline when onSaveOffline provided" time="0.162">
+    </testcase>
+    <testcase classname="ImageUpload component (unit) uploadImages creates folder when missing and calls uploadSmallFile" name="ImageUpload component (unit) uploadImages creates folder when missing and calls uploadSmallFile" time="0.183">
+    </testcase>
+    <testcase classname="ImageUpload component (unit) uploadImages handles large files via uploadLargeFile (chunked)" name="ImageUpload component (unit) uploadImages handles large files via uploadLargeFile (chunked)" time="0.365">
+    </testcase>
+    <testcase classname="ImageUpload component (unit) fetches subfolders when online and displays them" name="ImageUpload component (unit) fetches subfolders when online and displays them" time="0.131">
+    </testcase>
+    <testcase classname="ImageUpload component (unit) handles folder creation failure" name="ImageUpload component (unit) handles folder creation failure" time="0.188">
+    </testcase>
+  </testsuite>
+  <testsuite name="TypeScript Sample Tests" errors="0" failures="0" skipped="0" timestamp="2025-12-12T14:34:36" time="1.408" tests="13">
+    <testcase classname="ImageUpload helpers getFolderPath returns path" name="ImageUpload helpers getFolderPath returns path" time="0.001">
+    </testcase>
+    <testcase classname="ImageUpload helpers checkFolderExists returns true when ok" name="ImageUpload helpers checkFolderExists returns true when ok" time="0">
+    </testcase>
+    <testcase classname="ImageUpload helpers checkFolderExists returns false when not ok" name="ImageUpload helpers checkFolderExists returns false when not ok" time="0">
+    </testcase>
+    <testcase classname="ImageUpload helpers createFolder posts to graph and resolves" name="ImageUpload helpers createFolder posts to graph and resolves" time="0.001">
+    </testcase>
+    <testcase classname="ImageUpload helpers createFolder throws if not ok" name="ImageUpload helpers createFolder throws if not ok" time="0.02">
+    </testcase>
+    <testcase classname="ImageUpload helpers uploadSmallFile returns webUrl on success" name="ImageUpload helpers uploadSmallFile returns webUrl on success" time="0.001">
+    </testcase>
+    <testcase classname="ImageUpload helpers uploadSmallFile throws if PUT fails" name="ImageUpload helpers uploadSmallFile throws if PUT fails" time="0.001">
+    </testcase>
+    <testcase classname="ImageUpload helpers uploadLargeFile uploads and returns webUrl" name="ImageUpload helpers uploadLargeFile uploads and returns webUrl" time="0.001">
+    </testcase>
+    <testcase classname="ImageUpload helpers uploadLargeFile throws if session creation fails" name="ImageUpload helpers uploadLargeFile throws if session creation fails" time="0.001">
+    </testcase>
+    <testcase classname="ImageUpload helpers uploadLargeFile throws if chunk upload fails" name="ImageUpload helpers uploadLargeFile throws if chunk upload fails" time="0.001">
+    </testcase>
+    <testcase classname="ImageUpload helpers uploadLargeFile does multiple chunk PUT calls for large file" name="ImageUpload helpers uploadLargeFile does multiple chunk PUT calls for large file" time="0.002">
+    </testcase>
+    <testcase classname="ImageUpload helpers encodeFilesToBase64 returns array same length as files" name="ImageUpload helpers encodeFilesToBase64 returns array same length as files" time="0.001">
+    </testcase>
+    <testcase classname="ImageUpload helpers encodeFilesToBase64 reduces quality until under threshold" name="ImageUpload helpers encodeFilesToBase64 reduces quality until under threshold" time="0">
+    </testcase>
+  </testsuite>
+  <testsuite name="TypeScript Sample Tests" errors="0" failures="0" skipped="0" timestamp="2025-12-12T14:34:37" time="1.609" tests="12">
+    <testcase classname="Small UI components ErrorComponent displays error code" name="Small UI components ErrorComponent displays error code" time="0.006">
+    </testcase>
+    <testcase classname="Small UI components ErrorComponent shows unknown if undefined" name="Small UI components ErrorComponent shows unknown if undefined" time="0.002">
+    </testcase>
+    <testcase classname="Small UI components Loading displays text" name="Small UI components Loading displays text" time="0.002">
+    </testcase>
+    <testcase classname="Small UI components PageLayout renders children and NavBar" name="Small UI components PageLayout renders children and NavBar" time="0.021">
+    </testcase>
+    <testcase classname="Small UI components NavBar shows online/offline icons when toggling events" name="Small UI components NavBar shows online/offline icons when toggling events" time="0.037">
+    </testcase>
+    <testcase classname="ProfileData &amp; theme tests ProfileData renders fields" name="ProfileData &amp; theme tests ProfileData renders fields" time="0.029">
+    </testcase>
+    <testcase classname="ProfileData &amp; theme tests theme object contains primary colors" name="ProfileData &amp; theme tests theme object contains primary colors" time="0.001">
+    </testcase>
+    <testcase classname="Utils tests CustomNavigationClient calls navigate with replace option" name="Utils tests CustomNavigationClient calls navigate with replace option" time="0.001">
+    </testcase>
+    <testcase classname="Utils tests CustomNavigationClient calls navigate without replace" name="Utils tests CustomNavigationClient calls navigate without replace" time="0">
+    </testcase>
+    <testcase classname="Utils tests logToSharePoint handles success and failure" name="Utils tests logToSharePoint handles success and failure" time="0.001">
+    </testcase>
+    <testcase classname="Utils tests graph.callMsGraph calls fetch and returns json" name="Utils tests graph.callMsGraph calls fetch and returns json" time="0.001">
+    </testcase>
+    <testcase classname="Utils tests callMsGraph logs errors and gracefully returns undefined when fetch rejects" name="Utils tests callMsGraph logs errors and gracefully returns undefined when fetch rejects" time="0.001">
+    </testcase>
+  </testsuite>
+  <testsuite name="TypeScript Sample Tests" errors="0" failures="0" skipped="0" timestamp="2025-12-12T14:34:39" time="1.701" tests="7">
+    <testcase classname="ImageUpload helper functions getFolderPath builds path" name="ImageUpload helper functions getFolderPath builds path" time="0.001">
+    </testcase>
+    <testcase classname="ImageUpload helper functions checkFolderExists returns true/false based on fetch" name="ImageUpload helper functions checkFolderExists returns true/false based on fetch" time="0.001">
+    </testcase>
+    <testcase classname="ImageUpload helper functions createFolder posts to the createApi and throws on error" name="ImageUpload helper functions createFolder posts to the createApi and throws on error" time="0.021">
+    </testcase>
+    <testcase classname="ImageUpload helper functions uploadSmallFile returns webUrl on success" name="ImageUpload helper functions uploadSmallFile returns webUrl on success" time="0.001">
+    </testcase>
+    <testcase classname="ImageUpload helper functions uploadSmallFile throws on failed upload" name="ImageUpload helper functions uploadSmallFile throws on failed upload" time="0">
+    </testcase>
+    <testcase classname="ImageUpload helper functions uploadLargeFile success with chunking" name="ImageUpload helper functions uploadLargeFile success with chunking" time="0.001">
+    </testcase>
+    <testcase classname="ImageUpload helper functions resizeImage and encodeFilesToBase64 uses mocked Image/Canvas" name="ImageUpload helper functions resizeImage and encodeFilesToBase64 uses mocked Image/Canvas" time="0.001">
+    </testcase>
+  </testsuite>
+  <testsuite name="TypeScript Sample Tests" errors="0" failures="0" skipped="0" timestamp="2025-12-12T14:34:40" time="1.303" tests="6">
+    <testcase classname="ImageUpload utils getFolderPath builds correct path" name="ImageUpload utils getFolderPath builds correct path" time="0.001">
+    </testcase>
+    <testcase classname="ImageUpload utils checkFolderExists returns based on fetch.ok" name="ImageUpload utils checkFolderExists returns based on fetch.ok" time="0.001">
+    </testcase>
+    <testcase classname="ImageUpload utils createFolder POSTs to the parent path and resolves on ok" name="ImageUpload utils createFolder POSTs to the parent path and resolves on ok" time="0">
+    </testcase>
+    <testcase classname="ImageUpload utils createFolder rejects when API returns non-ok" name="ImageUpload utils createFolder rejects when API returns non-ok" time="0.023">
+    </testcase>
+    <testcase classname="ImageUpload utils uploadSmallFile PUTs file and returns webUrl" name="ImageUpload utils uploadSmallFile PUTs file and returns webUrl" time="0.001">
+    </testcase>
+    <testcase classname="ImageUpload utils uploadLargeFile creates session, uploads and returns webUrl" name="ImageUpload utils uploadLargeFile creates session, uploads and returns webUrl" time="0.026">
+    </testcase>
+  </testsuite>
+  <testsuite name="TypeScript Sample Tests" errors="0" failures="0" skipped="0" timestamp="2025-12-12T14:34:42" time="0.194" tests="11">
+    <testcase classname="postMessageToChannel posts message with mentions and without files" name="postMessageToChannel posts message with mentions and without files" time="0.002">
+    </testcase>
+    <testcase classname="postMessageToChannel sends payload with hostedContents (images) and mentions" name="postMessageToChannel sends payload with hostedContents (images) and mentions" time="0.004">
+    </testcase>
+    <testcase classname="postMessageToChannel throws on failed message POST" name="postMessageToChannel throws on failed message POST" time="0.009">
+    </testcase>
+    <testcase classname="postMessageToChannel filters invalid mentions and escapes HTML in mentions and customText" name="postMessageToChannel filters invalid mentions and escapes HTML in mentions and customText" time="0.002">
+    </testcase>
+    <testcase classname="postMessageToChannel handles empty text and empty files gracefully" name="postMessageToChannel handles empty text and empty files gracefully" time="0.001">
+    </testcase>
+    <testcase classname="postMessageToChannel uses default text when customText is empty and no mentions provided" name="postMessageToChannel uses default text when customText is empty and no mentions provided" time="0">
+    </testcase>
+    <testcase classname="postMessageToChannel uses fallback link &quot;#&quot; when imageUrls are missing for files" name="postMessageToChannel uses fallback link &quot;#&quot; when imageUrls are missing for files" time="0.002">
+    </testcase>
+    <testcase classname="postMessageToChannel resizes large landscape images correctly" name="postMessageToChannel resizes large landscape images correctly" time="0.002">
+    </testcase>
+    <testcase classname="postMessageToChannel resizes large portrait images correctly" name="postMessageToChannel resizes large portrait images correctly" time="0.002">
+    </testcase>
+    <testcase classname="postMessageToChannel handles image loading errors gracefully" name="postMessageToChannel handles image loading errors gracefully" time="0.007">
+    </testcase>
+    <testcase classname="postMessageToChannel handles canvas.toBlob failure" name="postMessageToChannel handles canvas.toBlob failure" time="0.003">
+    </testcase>
+  </testsuite>
+  <testsuite name="TypeScript Sample Tests" errors="0" failures="0" skipped="0" timestamp="2025-12-12T14:34:42" time="0.196" tests="2">
+    <testcase classname="UploadProgress component does not render when uploading is false" name="UploadProgress component does not render when uploading is false" time="0.003">
+    </testcase>
+    <testcase classname="UploadProgress component renders progress bar and text when uploading is true" name="UploadProgress component renders progress bar and text when uploading is true" time="0.014">
+    </testcase>
+  </testsuite>
+  <testsuite name="TypeScript Sample Tests" errors="0" failures="0" skipped="0" timestamp="2025-12-12T14:34:42" time="0.661" tests="3">
+    <testcase classname="Auth button components SignInButton opens menu and calls loginPopup/loginRedirect" name="Auth button components SignInButton opens menu and calls loginPopup/loginRedirect" time="0.256">
+    </testcase>
+    <testcase classname="Auth button components SignOutButton opens menu and calls logoutPopup/logoutRedirect" name="Auth button components SignOutButton opens menu and calls logoutPopup/logoutRedirect" time="0.156">
+    </testcase>
+    <testcase classname="Auth button components SignInSignOutButton renders SignIn or SignOut depending on auth state and inProgress" name="Auth button components SignInSignOutButton renders SignIn or SignOut depending on auth state and inProgress" time="0.028">
+    </testcase>
+  </testsuite>
+  <testsuite name="TypeScript Sample Tests" errors="0" failures="0" skipped="0" timestamp="2025-12-12T14:34:43" time="0.375" tests="3">
+    <testcase classname="ChannelsList component fetches channels when online and displays them" name="ChannelsList component fetches channels when online and displays them" time="0.085">
+    </testcase>
+    <testcase classname="ChannelsList component uses cached channels when offline or no account" name="ChannelsList component uses cached channels when offline or no account" time="0.014">
+    </testcase>
+    <testcase classname="ChannelsList component shows error when fetch fails" name="ChannelsList component shows error when fetch fails" time="0.006">
+    </testcase>
+  </testsuite>
+  <testsuite name="TypeScript Sample Tests" errors="0" failures="0" skipped="0" timestamp="2025-12-12T14:34:43" time="0.247" tests="1">
+    <testcase classname="App component renders header and TeamsList, and sets navigation client on pca" name="App component renders header and TeamsList, and sets navigation client on pca" time="0.03">
+    </testcase>
+  </testsuite>
+  <testsuite name="TypeScript Sample Tests" errors="0" failures="0" skipped="0" timestamp="2025-12-12T14:34:43" time="0.257" tests="4">
+    <testcase classname="NavBar renders title and children" name="NavBar renders title and children" time="0.011">
+    </testcase>
+    <testcase classname="NavBar updates icon and tooltip on network status change" name="NavBar updates icon and tooltip on network status change" time="0.019">
+    </testcase>
+    <testcase classname="NavBar renders correctly when initially offline" name="NavBar renders correctly when initially offline" time="0.005">
+    </testcase>
+    <testcase classname="NavBar removes event listeners on unmount" name="NavBar removes event listeners on unmount" time="0.006">
+    </testcase>
+  </testsuite>
+  <testsuite name="TypeScript Sample Tests" errors="0" failures="0" skipped="0" timestamp="2025-12-12T14:34:44" time="0.074" tests="2">
+    <testcase classname="DB exports and Dexie initialization db has tables favoriteTeams, posts, images" name="DB exports and Dexie initialization db has tables favoriteTeams, posts, images" time="0.001">
+    </testcase>
+    <testcase classname="DB exports and Dexie initialization OfflineDB class constructor creates Dexie instance" name="DB exports and Dexie initialization OfflineDB class constructor creates Dexie instance" time="0.001">
+    </testcase>
+  </testsuite>
+  <testsuite name="TypeScript Sample Tests" errors="0" failures="0" skipped="0" timestamp="2025-12-12T14:34:44" time="0.09" tests="2">
+    <testcase classname="Welcome and Profile components WelcomeName displays first name if account exists" name="Welcome and Profile components WelcomeName displays first name if account exists" time="0.007">
+    </testcase>
+    <testcase classname="Welcome and Profile components WelcomeName returns null if no account" name="Welcome and Profile components WelcomeName returns null if no account" time="0.002">
+    </testcase>
+  </testsuite>
+  <testsuite name="TypeScript Sample Tests" errors="0" failures="0" skipped="0" timestamp="2025-12-12T14:34:44" time="0.103" tests="6">
+    <testcase classname="MsGraphApiCall utils callMsGraph throws when no active account" name="MsGraphApiCall utils callMsGraph throws when no active account" time="0.023">
+    </testcase>
+    <testcase classname="MsGraphApiCall utils callMsGraph calls fetch when account present" name="MsGraphApiCall utils callMsGraph calls fetch when account present" time="0.001">
+    </testcase>
+    <testcase classname="PostMessage posting escapeHtml is used in mentions and handles text" name="PostMessage posting escapeHtml is used in mentions and handles text" time="0.001">
+    </testcase>
+    <testcase classname="PostMessage posting postMessageToChannel sends default text when customText empty" name="PostMessage posting postMessageToChannel sends default text when customText empty" time="0">
+    </testcase>
+    <testcase classname="PostMessage posting postMessageToChannel handles files to hostedContents" name="PostMessage posting postMessageToChannel handles files to hostedContents" time="0.004">
+    </testcase>
+    <testcase classname="PostMessage posting postMessageToChannel throws when message POST fails" name="PostMessage posting postMessageToChannel throws when message POST fails" time="0.004">
+    </testcase>
+  </testsuite>
+  <testsuite name="TypeScript Sample Tests" errors="0" failures="0" skipped="0" timestamp="2025-12-12T14:34:44" time="0.074" tests="1">
+    <testcase classname=" RTL import sanity check" name=" RTL import sanity check" time="0.001">
+    </testcase>
+  </testsuite>
+</testsuites>
