@@ -1,6 +1,5 @@
 {
     "name": "typescript-sample",
-    "homepage": "https://jameslead00.github.io/redIT_Baumgartner_BildUpload/",
     "version": "0.1.0",
     "private": true,
     "dependencies": {
