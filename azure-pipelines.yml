@@ -4,15 +4,53 @@ pr:
   branches:
     include:
       - main
+      - dev
+
 trigger:
   branches:
     include:
       - main
 
 jobs:
-- job: build_and_deploy_job
-  displayName: Build and Deploy Job
-  condition: or(eq(variables['Build.Reason'], 'Manual'),or(eq(variables['Build.Reason'], 'PullRequest'),eq(variables['Build.Reason'], 'IndividualCI')))
+- job: build_and_deploy_staging  # Für PRs
+  displayName: Build and Deploy to Staging (GitHub Pages)
+  condition: eq(variables['Build.Reason'], 'PullRequest')
+  pool:
+    vmImage: ubuntu-latest
+  variables:
+  - group: Azure-Static-Web-Apps-icy-mushroom-091e60c03-variable-group
+  steps:
+  - checkout: self
+    submodules: true
+
+  - task: NodeTool@0
+    displayName: Use Node.js 20
+    inputs:
+      versionSpec: '20.x'
+
+  - script: npm ci
+    displayName: Install dependencies
+
+  - script: npm run build  # Baue die App
+    displayName: Build app
+
+  # Ersetze den Azure-Task mit diesem Script
+  - script: |
+      git config --global user.name "Azure Pipelines"
+      git config --global user.email "azuredevops@microsoft.com"
+      git checkout --orphan gh-pages
+      git rm -rf .
+      cp -r build/* .
+      git add .
+      git commit -m "Deploy to GitHub Pages from PR"
+      git push https://$(GITHUB_TOKEN)@github.com/Jameslead00/redIT_Baumgartner_BildUpload.git gh-pages --force
+    displayName: Deploy to GitHub Pages
+    env:
+      GITHUB_TOKEN: $(GITHUB_TOKEN)
+
+- job: build_and_deploy_production  # Für main
+  displayName: Build and Deploy to Production
+  condition: and(eq(variables['Build.SourceBranch'], 'refs/heads/main'), or(eq(variables['Build.Reason'], 'Manual'), eq(variables['Build.Reason'], 'IndividualCI')))
   pool:
     vmImage: ubuntu-latest
   variables:
@@ -57,9 +95,7 @@ jobs:
   - task: AzureStaticWebApp@0
     inputs:
       azure_static_web_apps_api_token: $(AZURE_STATIC_WEB_APPS_API_TOKEN_ICY_MUSHROOM_091E60C03)
-###### Repository/Build Configurations - These values can be configured to match your app requirements. ######
-# For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
-      app_location: "/" # App source code path
-      api_location: "" # Api source code path - optional
-      output_location: "build" # Built app content directory - optional
-###### End of Repository/Build Configurations ######
+      app_location: "/"
+      api_location: ""
+      output_location: "build"
+      production_environment: true  # Produktion
