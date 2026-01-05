@@ -59,65 +59,7 @@ jobs:
   - task: AzureStaticWebApp@0
     inputs:
       azure_static_web_apps_api_token: $(AZURE_STATIC_WEB_APPS_API_TOKEN_ICY_MUSHROOM_091E60C03)
-###### Repository/Build Configurations - These values can be configured to match your app requirements. ######
-# For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
-      app_location: "/" # App source code path
-      api_location: "" # Api source code path - optional
-      output_location: "build" # Built app content directory - optional
-###### End of Repository/Build Configurations ######
-
-- deployment: build_and_deploy_staging
-  displayName: Build and Deploy to Staging
-  condition: eq(variables['Build.SourceBranch'], 'refs/heads/dev')
-  environment: Staging
-  pool:
-    vmImage: ubuntu-latest
-  variables:
-  - group: Azure-Static-Web-Apps-icy-mushroom-091e60c03-variable-group
-  strategy:
-    runOnce:
-      deploy:
-        steps:
-        - checkout: self
-          submodules: true
-
-        - task: NodeTool@0
-          displayName: Use Node.js 20
-          inputs:
-            versionSpec: '20.x'
-
-        - script: npm ci
-          displayName: Install dependencies
-
-        - script: npm run test:ci -- --reporters=default --reporters=jest-junit --coverageReporters=cobertura --coverageReporters=lcov
-          displayName: Run unit tests (Jest)
-          env:
-            CI: 'true'
-
-        - task: PublishTestResults@2
-          displayName: Publish test results (JUnit)
-          condition: succeededOrFailed()
-          inputs:
-            testResultsFormat: 'JUnit'
-            testResultsFiles: 'test-results.xml'
-            searchFolder: '$(System.DefaultWorkingDirectory)'
-            mergeTestResults: true
-            failTaskOnFailedTests: true
-            testRunTitle: 'Jest unit tests'
-
-        - task: PublishCodeCoverageResults@2
-          displayName: Publish code coverage (Cobertura)
-          condition: succeededOrFailed()
-          inputs:
-            codeCoverageTool: 'Cobertura'
-            summaryFileLocation: '$(System.DefaultWorkingDirectory)/coverage/cobertura-coverage.xml'
-            reportDirectory: '$(System.DefaultWorkingDirectory)/coverage/lcov-report'
-            pathToSources: '$(System.DefaultWorkingDirectory)/src'
-
-        - task: AzureStaticWebApp@0
-          inputs:
-            azure_static_web_apps_api_token: $(AZURE_STATIC_WEB_APPS_API_TOKEN_ICY_MUSHROOM_091E60C03)
-            app_location: "/"
-            api_location: ""
-            output_location: "build"
-            production_environment: false
+      app_location: "/"
+      api_location: ""
+      output_location: "build"
+      production_environment: $[ eq(variables['Build.Reason'], 'PullRequest') ]  # False für PRs (Staging), True für andere (Produktion)
