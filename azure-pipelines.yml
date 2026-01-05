@@ -14,7 +14,7 @@ trigger:
 jobs:
 - job: build_and_deploy_job
   displayName: Build and Deploy Job
-  condition: and(eq(variables['Build.SourceBranch'], 'refs/heads/main'), or(eq(variables['Build.Reason'], 'Manual'),or(eq(variables['Build.Reason'], 'PullRequest'),eq(variables['Build.Reason'], 'IndividualCI'))))
+  condition: or(eq(variables['Build.Reason'], 'PullRequest'), and(eq(variables['Build.SourceBranch'], 'refs/heads/main'), or(eq(variables['Build.Reason'], 'Manual'), eq(variables['Build.Reason'], 'IndividualCI'))))
   pool:
     vmImage: ubuntu-latest
   variables:
