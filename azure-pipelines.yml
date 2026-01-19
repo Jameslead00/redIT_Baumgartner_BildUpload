@@ -59,7 +59,6 @@ jobs:
   - script: export PUBLIC_URL=https://jameslead00.github.io/redIT_Baumgartner_BildUpload && npm run build  # Baue die App
     displayName: Build app
 
-  # Ersetze den Azure-Task mit diesem Script
   - script: |
       git config --global user.name "Azure Pipelines"
       git config --global user.email "azuredevops@microsoft.com"
