@@ -1,6 +1,6 @@
 import { useMsal } from "@azure/msal-react";
 import IconButton from '@mui/material/IconButton';
-import AccountCircle from "@mui/icons-material/AccountCircle";
+import Logout from "@mui/icons-material/Logout";
 
 export const SignOutButton = () => {
     const { instance } = useMsal();
@@ -17,7 +17,7 @@ export const SignOutButton = () => {
                 onClick={handleLogout}
                 color="inherit"
             >
-                <AccountCircle />
+                <Logout />
             </IconButton>
         </div>
     )
