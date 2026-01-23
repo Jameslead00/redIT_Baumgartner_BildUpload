@@ -20,11 +20,10 @@ describe("Auth button components", () => {
     jest.resetAllMocks();
   });
 
-  test("SignInButton opens menu and calls loginPopup/loginRedirect", async () => {
+  test("SignInButton directly calls loginPopup", async () => {
     const loginPopup = jest.fn();
-    const loginRedirect = jest.fn();
 
-    (msal.useMsal as jest.Mock).mockReturnValue({ instance: { loginPopup, loginRedirect }, accounts: [] });
+    (msal.useMsal as jest.Mock).mockReturnValue({ instance: { loginPopup }, accounts: [] });
     (msal.useAccount as jest.Mock).mockReturnValue(null);
     (msal.useIsAuthenticated as jest.Mock).mockReturnValue(false);
 
@@ -33,25 +32,14 @@ describe("Auth button components", () => {
     const loginBtn = screen.getByText(/Login/i);
     expect(loginBtn).toBeInTheDocument();
 
-    // Open menu
     await userEvent.click(loginBtn);
-
-    const popupMenuItem = screen.getByText(/Sign in using Popup/i);
-    await userEvent.click(popupMenuItem);
     expect(loginPopup).toHaveBeenCalled();
-
-    // Re-open and test redirect
-    await userEvent.click(loginBtn);
-    const redirectMenuItem = screen.getByText(/Sign in using Redirect/i);
-    await userEvent.click(redirectMenuItem);
-    expect(loginRedirect).toHaveBeenCalled();
   });
 
-  test("SignOutButton opens menu and calls logoutPopup/logoutRedirect", async () => {
+  test("SignOutButton directly calls logoutPopup", async () => {
     const logoutPopup = jest.fn();
-    const logoutRedirect = jest.fn();
 
-    (msal.useMsal as jest.Mock).mockReturnValue({ instance: { logoutPopup, logoutRedirect }, accounts: [] });
+    (msal.useMsal as jest.Mock).mockReturnValue({ instance: { logoutPopup }, accounts: [] });
     (msal.useAccount as jest.Mock).mockReturnValue({ name: "Test User", username: "test@domain" });
     (msal.useIsAuthenticated as jest.Mock).mockReturnValue(true);
 
@@ -61,15 +49,7 @@ describe("Auth button components", () => {
     const btn = screen.getByRole("button");
     await userEvent.click(btn);
 
-    const popupMenuItem = screen.getByText(/Logout using Popup/i);
-    await userEvent.click(popupMenuItem);
     expect(logoutPopup).toHaveBeenCalled();
-
-    // Re-open and test redirect
-    await userEvent.click(btn);
-    const redirectMenuItem = screen.getByText(/Logout using Redirect/i);
-    await userEvent.click(redirectMenuItem);
-    expect(logoutRedirect).toHaveBeenCalled();
   });
 
   test("SignInSignOutButton renders SignIn or SignOut depending on auth state and inProgress", async () => {
