@@ -9,7 +9,7 @@ const WelcomeName = () => {
 
     useEffect(() => {
         if (account && account.name) {
-            setName(account.name.split(" ")[0]);
+            setName(account.name);
         } else {
             setName("");
         }

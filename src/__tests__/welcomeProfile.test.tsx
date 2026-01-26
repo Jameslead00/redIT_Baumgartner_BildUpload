@@ -14,13 +14,13 @@ import * as msal from "@azure/msal-react";
 describe("Welcome and Profile components", () => {
   afterEach(() => jest.resetAllMocks());
 
-  test("WelcomeName displays first name if account exists", () => {
+  test("WelcomeName displays full name if account exists", () => {
     const account = { name: "Max Mustermann" };
     (msal.useMsal as jest.Mock).mockReturnValue({ accounts: [account] });
     (msal.useAccount as jest.Mock).mockReturnValue(account);
 
     render(<WelcomeName />);
-    expect(screen.getByText(/Willkommen Max/i)).toBeInTheDocument();
+    expect(screen.getByText(/Willkommen Max Mustermann/i)).toBeInTheDocument();
   });
 
   test("WelcomeName returns null if no account", () => {
