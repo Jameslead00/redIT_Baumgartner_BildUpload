@@ -242,6 +242,21 @@ describe('postMessageToChannel', () => {
         .rejects.toThrow();
   });
 
+  test('posts message without images or files', async () => {
+    const mockFetch = jest.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    (global as any).fetch = mockFetch;
+
+    await postMessageToChannel('token', 't1', 'c1', 'Text only post', undefined, undefined, []);
+
+    const options = mockFetch.mock.calls[0][1];
+    const body = JSON.parse(options.body);
+    
+    expect(body.hostedContents).toEqual([]);
+    expect(body.mentions).toEqual([]);
+    expect(body.body.content).toContain('Text only post');
+    expect(body.body.content).not.toContain('src="../hostedContents/');
+  });
+
   test('handles canvas.toBlob failure', async () => {
     // Mock Canvas toBlob failure (callback with null)
     jest.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((cb: any) => {

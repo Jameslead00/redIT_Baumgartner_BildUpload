@@ -112,20 +112,20 @@ export const postMessageToChannel = async (
     teamId: string,
     channelId: string,
     customText: string,
-    imageUrls: string[],
-    files: File[],
+    imageUrls?: string[],
+    files?: File[],
     mentions: MentionUser[] = [] 
 ): Promise<void> => {
     
-    // 1. Hosted Contents vorbereiten
-    const hostedContents = await Promise.all(files.map(async (file, index) => {
+    // 1. Hosted Contents vorbereiten (nur wenn files vorhanden)
+    const hostedContents = files && files.length > 0 ? await Promise.all(files.map(async (file, index) => {
         const contentBytes = await prepareImageForHostedContent(file);
         return {
             "@microsoft.graph.temporaryId": (index + 1).toString(),
             "contentBytes": contentBytes,
             "contentType": "image/jpeg"
         };
-    }));
+    })) : [];
 
     // 2. Mentions vorbereiten
     // WICHTIG: Filtere ungültige User ohne ID heraus, um Fehler zu vermeiden
@@ -148,9 +148,9 @@ export const postMessageToChannel = async (
     const mentionsHtml = validMentions.map((user, index) => `<at id="${index}">${escapeHtml(user.displayName)}</at>`).join(' ');
 
     // 3. HTML Body erstellen
-    const imagesHtml = hostedContents.map((hc, index) => {
+    const imagesHtml = hostedContents.length > 0 ? hostedContents.map((hc, index) => {
         const id = hc["@microsoft.graph.temporaryId"];
-        const oneDriveUrl = imageUrls[index] || "#";
+        const oneDriveUrl = (imageUrls && imageUrls[index]) || "#";
         return `
             <div style="margin-bottom: 16px;">
                 <img src="../hostedContents/${id}/$value" style="max-width: 100%; width: auto; border-radius: 4px; display: block;" alt="Image ${index + 1}">
@@ -160,7 +160,7 @@ export const postMessageToChannel = async (
                     </a>
                 </div>
             </div>`;
-    }).join('');
+    }).join('') : '';
 
     // Text zusammenbauen: Mentions vor dem eigentlichen Text
     // Wir nutzen <p> für den Text-Block

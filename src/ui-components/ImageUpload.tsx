@@ -574,17 +574,15 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
                     </Grid>
                 </Box>
             )}
-            {/* TextField immer anzeigen, wenn Dateien ausgewählt */}
-            {selectedFiles.length > 0 && (
-                <TextField
-                    fullWidth
-                    label="Nachricht zum Beitrag hinzufügen"
-                    value={customText}
-                    onChange={(e) => onCustomTextChange(e.target.value)}
-                    variant="outlined"
-                    sx={{ mb: 2 }}
-                />
-            )}
+            {/* TextField immer anzeigen, auch ohne Dateien */}
+            <TextField
+                fullWidth
+                label="Nachricht zum Beitrag hinzufügen"
+                value={customText}
+                onChange={(e) => onCustomTextChange(e.target.value)}
+                variant="outlined"
+                sx={{ mb: 2 }}
+            />
 
             {/* NEU: Progress Komponente einbinden */}
             <UploadProgress 

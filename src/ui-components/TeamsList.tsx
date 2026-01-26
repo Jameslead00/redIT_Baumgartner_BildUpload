@@ -714,7 +714,7 @@ const TeamsList: React.FC = () => {
                 </>
             )}
             {/* ÄNDERUNG: Button anzeigen auch ohne Text, wenn Upload erfolgreich war */}
-            {uploadSuccess && (customText.trim() || imageUrls.length > 0) && isOnline && account && (
+            {selectedChannel && (customText.trim() || imageUrls.length > 0) && isOnline && account && (
                 <Button
                     variant="contained"
                     color="primary"
