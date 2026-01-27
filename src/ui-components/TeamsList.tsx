@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useMsal, useAccount } from "@azure/msal-react";
 import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import { loginRequest } from "../authConfig";
@@ -6,7 +6,7 @@ import { db, Team, Channel, SubFolder } from '../db'; // Import SubFolder
 import { logToSharePoint } from "../utils/Logger";
 import ChannelsList from "./ChannelsList";
 import { postMessageToChannel, MentionUser } from "./PostMessage"; // MentionUser importieren
-import { Autocomplete, TextField, Button, Typography, Box, Alert, IconButton } from "@mui/material";
+import { Autocomplete, TextField, Button, Typography, Box, Alert, IconButton, Snackbar } from "@mui/material";
 import { Star, StarBorder } from "@mui/icons-material";
 import { checkFolderExists, createFolder, uploadLargeFile, uploadSmallFile, encodeFilesToBase64, getFolderPath } from './ImageUpload';
 
@@ -32,6 +32,13 @@ const TeamsList: React.FC = () => {
     // Neue States für Mentions
     const [teamMembers, setTeamMembers] = useState<MentionUser[]>([]);
     const [selectedMentions, setSelectedMentions] = useState<MentionUser[]>([]);
+
+    // Neue States für Snackbar
+    const [snackbarOpen, setSnackbarOpen] = useState(false);
+    const [snackbarMessage, setSnackbarMessage] = useState('');
+
+    // Ref, um zu verhindern, dass Sync mehrmals läuft
+    const hasSyncedRef = useRef(false);
 
     // Online-Status überwachen
     useEffect(() => {
@@ -75,6 +82,16 @@ const TeamsList: React.FC = () => {
         };
         loadCachedAllTeams();
     }, []);
+
+    // Automatische Synchronisation, wenn online und Posts vorhanden
+    useEffect(() => {
+        if (isOnline && account && offlinePosts.length > 0 && !hasSyncedRef.current) {
+            hasSyncedRef.current = true;
+            syncOfflinePosts();
+        } else if (!isOnline || !account) {
+            hasSyncedRef.current = false; // Reset wenn offline oder nicht eingeloggt
+        }
+    }, [isOnline, account, offlinePosts.length]);
 
     useEffect(() => {
         const stored = localStorage.getItem('favoriteTeams');
@@ -685,7 +702,7 @@ const TeamsList: React.FC = () => {
     const syncOfflinePosts = async () => {
         if (!account || !isOnline || offlinePosts.length === 0) return;
         setPosting(true);
-        console.log('Starte Sync für', offlinePosts.length, 'Posts');
+        console.log('Starte automatische Sync für', offlinePosts.length, 'Posts');
         for (const post of offlinePosts) {
             try {
                 console.log('Sync Post:', post.id);
@@ -756,7 +773,9 @@ const TeamsList: React.FC = () => {
         }
         setOfflinePosts([]);
         setPosting(false);
-        alert('Alle cached Posts hochgeladen!');
+        // Feedback via Snackbar anstatt alert
+        setSnackbarMessage(`${offlinePosts.length} cached Post(s) wurden automatisch hochgeladen!`);
+        setSnackbarOpen(true);
     };
 
     const handlePostToChannel = async () => {
@@ -877,12 +896,12 @@ const TeamsList: React.FC = () => {
                     {posting ? "Posting..." : "Beitrag in Kanal posten"}
                 </Button>
             )}
-            {/* Sync-Button immer anzeigen, wenn Posts vorhanden und online/account */}
-            {offlinePosts.length > 0 && isOnline && account && (
-                <Button onClick={syncOfflinePosts} variant="contained" sx={{ mt: 2 }} disabled={posting}>
-                    Upload ({offlinePosts.length}) cached post(s)
-                </Button>
-            )}
+            {/* Snackbar für Feedback */}
+            <Snackbar open={snackbarOpen} autoHideDuration={6000} onClose={() => setSnackbarOpen(false)}>
+                <Alert onClose={() => setSnackbarOpen(false)} severity="success" sx={{ width: '100%' }}>
+                    {snackbarMessage}
+                </Alert>
+            </Snackbar>
         </Box>
     );
 };

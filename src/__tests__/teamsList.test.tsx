@@ -543,7 +543,7 @@ describe("TeamsList component", () => {
     }, { timeout: 3000 });
   });
 
-  test('syncOfflinePosts uploads cached posts when button clicked', async () => {
+  test('syncOfflinePosts uploads cached posts automatically when online', async () => {
     const dbModule = require('../db');
     jest.clearAllMocks();
 
@@ -571,13 +571,7 @@ describe("TeamsList component", () => {
 
     render(<TeamsList />);
 
-    // Wait for posts to load
-    await waitFor(() => expect(dbModule.db.posts.toArray).toHaveBeenCalled());
-
-    // Find Sync Button
-    const syncButton = await screen.findByText(/Upload \(1\) cached post\(s\)/i);
-    await userEvent.click(syncButton);
-
+    // Wait for posts to load and automatic sync to trigger
     await waitFor(() => {
         expect(postMessageToChannel).toHaveBeenCalled();
         expect(dbModule.db.posts.delete).toHaveBeenCalledWith(1);
