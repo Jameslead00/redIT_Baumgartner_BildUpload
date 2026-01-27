@@ -521,8 +521,17 @@ const TeamsList: React.FC = () => {
     // Kombiniere online Teams mit gecachten Favoriten für Offline
     const availableTeams = useMemo(() => {
         if (isOnline && teams.length > 0) return sortedTeams;
-        return cachedAllTeams.map(fav => ({ id: fav.id, displayName: fav.displayName }));  // Offline: Alle gecachten Teams
-    }, [isOnline, teams, sortedTeams, cachedAllTeams]);
+        // Offline: Sortiere gecachte Teams nach Favoriten (gleiche Logik wie sortedTeams)
+        return cachedAllTeams
+            .map(fav => ({ id: fav.id, displayName: fav.displayName }))
+            .sort((a, b) => {
+                const aFav = favorites.has(a.id);
+                const bFav = favorites.has(b.id);
+                if (aFav && !bFav) return -1;
+                if (!aFav && bFav) return 1;
+                return a.displayName.localeCompare(b.displayName);
+            });
+    }, [isOnline, teams, sortedTeams, cachedAllTeams, favorites]);
 
     // Füge syncPost Funktion hinzu (falls nicht vorhanden)
     // ÄNDERUNG: Callback Signatur angepasst
