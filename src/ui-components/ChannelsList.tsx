@@ -26,6 +26,8 @@ interface ChannelsListProps {
     cachedChannels?: Channel[];  // Neue Prop für gecachte Kanäle
     onSaveOffline?: (files: File[]) => void;  // Füge onSaveOffline Prop hinzu
     cachedSubFolders?: { [channelId: string]: SubFolder[] }; // New Prop
+    cachedAllChannels?: Channel[]; // Neue Prop für alle gecachten Kanäle
+    cachedAllSubFolders?: { [channelId: string]: SubFolder[] }; // Neue Prop für alle gecachten Subfolders
 }
 
 const ChannelsList: React.FC<ChannelsListProps> = ({
@@ -38,6 +40,8 @@ const ChannelsList: React.FC<ChannelsListProps> = ({
     cachedChannels = [],  // Default leer
     onSaveOffline,
     cachedSubFolders = {}, // Default empty
+    cachedAllChannels = [], // Neue Prop
+    cachedAllSubFolders = {}, // Neue Prop
 }) => {
     const { instance, accounts } = useMsal();
     const account = useAccount(accounts[0] || {});
@@ -62,7 +66,7 @@ const ChannelsList: React.FC<ChannelsListProps> = ({
     useEffect(() => {
         const fetchChannels = async () => {
             if (!account || !isOnline) {
-                setChannels(cachedChannels);  // Verwende gecachte Kanäle, wenn offline oder nicht eingeloggt
+                setChannels(cachedAllChannels);  // Verwende gecachte Kanäle aus allen Teams, wenn offline oder nicht eingeloggt
                 setLoading(false);
                 return;
             }

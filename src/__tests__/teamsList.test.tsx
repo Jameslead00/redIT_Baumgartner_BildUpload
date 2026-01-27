@@ -71,6 +71,9 @@ jest.mock("../db", () => {
   const fakeDelete = jest.fn().mockResolvedValue(undefined);
   const fakeToArray = jest.fn().mockResolvedValue([]);
   const fakeGet = jest.fn().mockResolvedValue(undefined);
+  const fakeToCollection = jest.fn(() => ({
+    primaryKeys: jest.fn().mockResolvedValue([])
+  }));
   const fakeWhere = jest.fn(() => ({
     equals: jest.fn(() => ({
       toArray: jest.fn().mockResolvedValue([]),
@@ -86,6 +89,13 @@ jest.mock("../db", () => {
         put: fakePut,
         delete: fakeDelete,
         get: fakeGet,
+      },
+      allJoinedTeams: {
+        toArray: fakeToArray,
+        put: fakePut,
+        delete: fakeDelete,
+        get: fakeGet,
+        toCollection: fakeToCollection,
       },
       posts: {
         toArray: jest.fn().mockResolvedValue([]),
@@ -209,6 +219,44 @@ describe("TeamsList component", () => {
     });
   });
 
+  test("passes cachedAllChannels and cachedAllSubFolders to ChannelsList", async () => {
+    const fakeMsalInstance = {
+      acquireTokenSilent: jest.fn().mockResolvedValue({ accessToken: 'mock-token' })
+    };
+
+    (msal.useMsal as jest.Mock).mockReturnValue({ instance: fakeMsalInstance, accounts: [{}] });
+    (msal.useAccount as jest.Mock).mockReturnValue({ name: "User", username: "u@test" });
+
+    // Mock fetch for joinedTeams
+    (global as any).fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ value: teams })
+    });
+
+    const dbModule = require('../db');
+    dbModule.db.allJoinedTeams.toArray.mockResolvedValue([{ id: 't1', displayName: 'Team One', channels: [{ id: 'c1', displayName: 'General' }], channelSubFolders: { c1: [{ id: 's1', name: 'Sub' }] } }]);
+
+    render(<TeamsList />);
+
+    // Wait for teams to load
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Search teams/i)).toBeInTheDocument();
+    });
+
+    // Select team
+    const input = await screen.findByLabelText(/Search teams/i);
+    await userEvent.click(input);
+    await userEvent.type(input, 'Team One');
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+
+    // Check if ChannelsList props include cachedAllChannels and cachedAllSubFolders
+    await waitFor(() => {
+      const props = (global as any).__lastChannelsListProps;
+      expect(props.cachedAllChannels).toEqual([{ id: 'c1', displayName: 'General' }]);
+      expect(props.cachedAllSubFolders).toEqual({ c1: [{ id: 's1', name: 'Sub' }] });
+    });
+  });
+
   test("toggling favorite stores in DB and updates localStorage", async () => {
     const fakeMsalInstance = {
       acquireTokenSilent: jest.fn().mockResolvedValue({ accessToken: 'mock-token' })
@@ -311,14 +359,14 @@ describe("TeamsList component", () => {
     });
   });
 
-  test('offline uses cached favorites for the Autocomplete', async () => {
+  test('offline uses cached all teams for the Autocomplete', async () => {
     // Simulate offline and no account
     Object.defineProperty(window.navigator, 'onLine', { value: false, configurable: true });
     (msal.useMsal as jest.Mock).mockReturnValue({ instance: {}, accounts: [] });
     (msal.useAccount as jest.Mock).mockReturnValue(null);
 
     const dbModule = require('../db');
-    dbModule.db.favoriteTeams.toArray.mockResolvedValue([{ id: 't1', displayName: 'Team One' }]);
+    dbModule.db.allJoinedTeams.toArray.mockResolvedValue([{ id: 't1', displayName: 'Team One' }]);
     dbModule.db.posts.toArray.mockResolvedValue([]);
 
     render(<TeamsList />);

@@ -43,6 +43,7 @@ export interface OfflinePost {
 
 export class OfflineDB extends Dexie {
     favoriteTeams!: Dexie.Table<FavoriteTeam, string>;
+    allJoinedTeams!: Dexie.Table<FavoriteTeam, string>;  // Neue Tabelle
     posts!: Dexie.Table<OfflinePost, number>;
     images!: Dexie.Table<{ id?: number; postId: number; file: File }, number>;
 
@@ -67,6 +68,14 @@ export class OfflineDB extends Dexie {
         // Version 3 (neu): 'channelSubFolders' hinzufügen
         this.version(3).stores({
             favoriteTeams: 'id, displayName, channels, members, channelSubFolders', 
+            posts: '++id, teamId, channelId, text, imageUrls, timestamp',
+            images: '++id, postId, file'
+        });
+
+        // Version 4: Neue Tabelle für alle beigetretenen Teams
+        this.version(4).stores({
+            favoriteTeams: 'id, displayName, channels, members, channelSubFolders',
+            allJoinedTeams: 'id, displayName, channels, members, channelSubFolders',  // Neue Tabelle
             posts: '++id, teamId, channelId, text, imageUrls, timestamp',
             images: '++id, postId, file'
         });

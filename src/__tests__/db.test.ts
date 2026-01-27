@@ -1,11 +1,12 @@
 import { db, OfflineDB } from '../db';
 
 describe('DB exports and Dexie initialization', () => {
-  test('db has tables favoriteTeams, posts, images', () => {
+  test('db has tables favoriteTeams, posts, images, allJoinedTeams', () => {
     expect(db).toBeDefined();
     expect((db as any).favoriteTeams).toBeDefined();
     expect((db as any).posts).toBeDefined();
     expect((db as any).images).toBeDefined();
+    expect((db as any).allJoinedTeams).toBeDefined();
   });
 
   test('OfflineDB class constructor creates Dexie instance', () => {

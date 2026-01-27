@@ -27,6 +27,7 @@ const TeamsList: React.FC = () => {
     const [offlinePosts, setOfflinePosts] = useState<any[]>([]);
     const [cachedFavorites, setCachedFavorites] = useState<any[]>([]);
     const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+    const [cachedAllTeams, setCachedAllTeams] = useState<any[]>([]);  // Neuer State für alle gecachten Teams
     
     // Neue States für Mentions
     const [teamMembers, setTeamMembers] = useState<MentionUser[]>([]);
@@ -66,6 +67,15 @@ const TeamsList: React.FC = () => {
         loadCachedData();
     }, []);
 
+    // Lade gecachte Teams für Offline
+    useEffect(() => {
+        const loadCachedAllTeams = async () => {
+            const cached = await db.allJoinedTeams.toArray();
+            setCachedAllTeams(cached);  // Neuer State: const [cachedAllTeams, setCachedAllTeams] = useState<any[]>([]);
+        };
+        loadCachedAllTeams();
+    }, []);
+
     useEffect(() => {
         const stored = localStorage.getItem('favoriteTeams');
         setFavorites(stored ? new Set(JSON.parse(stored)) : new Set());
@@ -91,6 +101,25 @@ const TeamsList: React.FC = () => {
                 if (graphResponse.ok) {
                     const data = await graphResponse.json();
                     setTeams(data.value);
+                    
+                    // Cache alle Teams
+                    for (const team of data.value) {
+                        await db.allJoinedTeams.put({
+                            id: team.id,
+                            displayName: team.displayName,
+                            channels: [],  // Wird später gefüllt
+                            members: [],
+                            channelSubFolders: {},
+                        });
+                    }
+                    
+                    // Entferne Teams aus Cache, die nicht mehr beigetreten sind
+                    const cachedTeamIds = await db.allJoinedTeams.toCollection().primaryKeys();
+                    const currentTeamIds = data.value.map((t: any) => t.id);
+                    const toRemove = cachedTeamIds.filter(id => !currentTeamIds.includes(id));
+                    for (const id of toRemove) {
+                        await db.allJoinedTeams.delete(id);
+                    }
                 } else {
                     setError("Failed to fetch teams");
                 }
@@ -241,6 +270,113 @@ const TeamsList: React.FC = () => {
         loadAndCacheDataForFavorites();
     }, [favorites, account, isOnline, teams]); // cachedFavorites aus Deps entfernt um Loop zu vermeiden
 
+    // Neuer useEffect für Caching von Kanälen/Mitgliedern/Subfolders für ALLE Teams (nicht nur Favoriten)
+    useEffect(() => {
+        const loadAndCacheAllTeamsDetails = async () => {
+            if (!account || !isOnline || teams.length === 0) return;
+            const request = { ...loginRequest, account };
+            const response = await instance.acquireTokenSilent(request);
+            const accessToken = response.accessToken;
+
+            for (const team of teams) {
+                const cachedTeam = await db.allJoinedTeams.get(team.id);
+                if (!cachedTeam) continue;  // Sollte nicht passieren
+                
+                let channels = cachedTeam.channels;
+                let members = cachedTeam.members;
+                let channelSubFolders = cachedTeam.channelSubFolders || {};
+                let needsUpdate = false;
+
+                // Kanäle laden (falls fehlen)
+                if (!channels || channels.length === 0) {
+                    try {
+                        const channelsResponse = await fetch(`https://graph.microsoft.com/v1.0/teams/${team.id}/channels`, {
+                            headers: { Authorization: `Bearer ${accessToken}` },
+                        });
+                        if (channelsResponse.ok) {
+                            const channelsData = await channelsResponse.json();
+                            channels = channelsData.value;
+                            needsUpdate = true;
+                        }
+                    } catch (err) {
+                        console.error(`Fehler beim Laden von Kanälen für ${team.id}:`, err);
+                    }
+                }
+
+                // Mitglieder laden (falls fehlen)
+                if (!members || members.length === 0) {
+                    try {
+                        const membersResponse = await fetch(`https://graph.microsoft.com/v1.0/teams/${team.id}/members`, {
+                            headers: { Authorization: `Bearer ${accessToken}` },
+                        });
+                        if (membersResponse.ok) {
+                            const membersData = await membersResponse.json();
+                            members = membersData.value
+                                .filter((m: any) => m.userId)
+                                .map((m: any) => ({
+                                    id: m.userId,
+                                    displayName: m.displayName
+                                }));
+                            needsUpdate = true;
+                        }
+                    } catch (err) {
+                        console.error(`Fehler beim Laden von Mitgliedern für ${team.id}:`, err);
+                    }
+                }
+
+                // Subfolders für jeden Kanal laden (falls fehlen)
+                if (channels && channels.length > 0) {
+                    try {
+                        const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/groups/${team.id}/sites/root`, {
+                            headers: { Authorization: `Bearer ${accessToken}` },
+                        });
+                        if (siteResponse.ok) {
+                            const siteData = await siteResponse.json();
+                            const siteId = siteData.id;
+
+                            for (const channel of channels) {
+                                const folderPath = getFolderPath(channel.displayName);
+                                try {
+                                    const childrenResponse = await fetch(
+                                        `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${folderPath}:/children?filter=folder ne null&select=id,name`, 
+                                        { headers: { Authorization: `Bearer ${accessToken}` } }
+                                    );
+                                    
+                                    if (childrenResponse.ok) {
+                                        const data = await childrenResponse.json();
+                                        const subs = data.value.map((item: any) => ({ id: item.id, name: item.name }));
+                                        channelSubFolders[channel.id] = subs;
+                                        needsUpdate = true;
+                                    } else if (childrenResponse.status === 404) {
+                                        channelSubFolders[channel.id] = [];
+                                        needsUpdate = true;
+                                    }
+                                } catch (e) {
+                                    console.warn(`Could not fetch subfolders for channel ${channel.displayName}`, e);
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Error fetching site ID for subfolders", e);
+                    }
+                }
+
+                // Speichere Updates
+                if (needsUpdate) {
+                    const updatedTeam = { 
+                        id: team.id, 
+                        displayName: team.displayName, 
+                        channels: channels || [],
+                        members: members || [],
+                        channelSubFolders: channelSubFolders
+                    };
+                    await db.allJoinedTeams.put(updatedTeam);
+                }
+            }
+        };
+        loadAndCacheAllTeamsDetails();
+    }, [teams, account, isOnline]);  // Läuft nach teams-Update
+
     const toggleFavorite = async (teamId: string) => {
         const newFavorites = new Set(favorites);
         if (newFavorites.has(teamId)) {
@@ -385,8 +521,8 @@ const TeamsList: React.FC = () => {
     // Kombiniere online Teams mit gecachten Favoriten für Offline
     const availableTeams = useMemo(() => {
         if (isOnline && teams.length > 0) return sortedTeams;
-        return cachedFavorites.map(fav => ({ id: fav.id, displayName: fav.displayName }));  // Offline: Nur gecachte
-    }, [isOnline, teams, sortedTeams, cachedFavorites]);
+        return cachedAllTeams.map(fav => ({ id: fav.id, displayName: fav.displayName }));  // Offline: Alle gecachten Teams
+    }, [isOnline, teams, sortedTeams, cachedAllTeams]);
 
     // Füge syncPost Funktion hinzu (falls nicht vorhanden)
     // ÄNDERUNG: Callback Signatur angepasst
@@ -687,6 +823,8 @@ const TeamsList: React.FC = () => {
                         cachedChannels={cachedFavorites.find(f => f.id === selectedTeam.id)?.channels || []}
                         // FIX: Pass cachedSubFolders prop
                         cachedSubFolders={cachedFavorites.find(f => f.id === selectedTeam.id)?.channelSubFolders || {}}
+                        cachedAllChannels={cachedAllTeams.find(t => t.id === selectedTeam.id)?.channels || []}
+                        cachedAllSubFolders={cachedAllTeams.find(t => t.id === selectedTeam.id)?.channelSubFolders || {}}
                         onSaveOffline={saveOfflinePost}
                     />
                     
