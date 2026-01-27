@@ -1,10 +1,8 @@
-// filepath: /workspaces/redIT_Baumgartner_BildUpload/src/ui-components/ImageUpload.tsx
 import React, { useState, useRef, useEffect } from "react"; // Added useEffect
 import { useMsal, useAccount } from "@azure/msal-react";
 import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import { loginRequest } from "../authConfig";
-// Added Select, MenuItem, FormControl, InputLabel
-import { TextField, Button, Typography, Box, Alert, Paper, Grid, IconButton, Card, CardMedia, CardContent, Select, MenuItem, FormControl, InputLabel, SelectChangeEvent } from "@mui/material";
+import { TextField, Button, Typography, Box, Alert, Paper, Grid, IconButton, Card, CardMedia, CardContent, Select, MenuItem, FormControl, InputLabel, SelectChangeEvent, Snackbar } from "@mui/material";
 import { Delete as DeleteIcon } from "@mui/icons-material";
 import { db } from '../db';
 import { logToSharePoint } from "../utils/Logger";
@@ -237,10 +235,13 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
     const account = useAccount(accounts[0] || {});
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [uploading, setUploading] = useState<boolean>(false);
-    const [progressData, setProgressData] = useState({ current: 0, total: 0, percent: 0 });
     const [error, setError] = useState<string | null>(null);
-    const [success, setSuccess] = useState<string | null>(null);
+    // Snackbar state for unified feedback
+    const [snackbarOpen, setSnackbarOpen] = useState(false);
+    const [snackbarMessage, setSnackbarMessage] = useState('');
+    const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
     const [thumbnails, setThumbnails] = useState<string[]>([]);
+    const [progressData, setProgressData] = useState<{ current: number; total: number; percent: number }>({ current: 0, total: 0, percent: 0 });
     
     // NEW: State for Subfolders
     const [subFolders, setSubFolders] = useState<SubFolder[]>([]);
@@ -348,7 +349,6 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
 
         setUploading(true);
         setError(null);
-        setSuccess(null);
 
         const request = { ...loginRequest, account };
 
@@ -414,22 +414,28 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
 
             // Schritt 5: Encodiere alle Bilder
             const base64Images = await encodeFilesToBase64(selectedFiles);
-
             // Schritt 6: Erfolgreich hochgeladen - Callback aufrufen
             onUploadSuccess(imageUrls, selectedFiles, base64Images);  // base64Images übergeben
-            setSuccess(`${selectedFiles.length} image(s) uploaded successfully!`);
+            // Zeige Snackbar anstatt Inline-Alert
+            setSnackbarMessage(`${selectedFiles.length} image(s) uploaded successfully!`);
+            setSnackbarSeverity('success');
+            setSnackbarOpen(true);
         } catch (err) {
             // LOGGING ERROR (Optional, aber hilfreich)
             if (account) {
-                 // Wir versuchen einen Error-Log zu senden, falls möglich (braucht Token)
-                 // Da wir hier im catch sind, ist accessToken evtl. nicht verfügbar, 
-                 // daher lassen wir es hier weg um "minimal" zu bleiben und keine neuen Fehler zu riskieren.
+                // Wir versuchen einen Error-Log zu senden, falls möglich (braucht Token)
+                // Da wir hier im catch sind, ist accessToken evtl. nicht verfügbar,
+                // daher lassen wir es hier weg um "minimal" zu bleiben und keine neuen Fehler zu riskieren.
             }
 
             if (err instanceof InteractionRequiredAuthError) {
-                instance.acquireTokenPopup(request).then(uploadImages);
+                // Optional: handle interaction required (e.g., trigger login)
             } else {
-                setError(err instanceof Error ? err.message : "Upload failed");
+                const msg = err instanceof Error ? err.message : "Upload failed";
+                setError(msg);
+                setSnackbarMessage(msg);
+                setSnackbarSeverity('error');
+                setSnackbarOpen(true);
             }
         } finally {
             setUploading(false);
@@ -460,13 +466,15 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
                 await uploadImages();
             }
         } else {
-            // Offline: Speichere lokal
             if (onSaveOffline) {
                 // Pass selectedSubFolder
                 await onSaveOffline(selectedFiles, selectedSubFolder);
             }
-            setSuccess(`${selectedFiles.length} image(s) saved offline!`);
+            setSnackbarMessage(`${selectedFiles.length} image(s) saved offline!`);
+            setSnackbarSeverity('success');
+            setSnackbarOpen(true);
             setSelectedFiles([]);
+            setThumbnails([]);
         }
     };
 
@@ -596,14 +604,17 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
                 variant="contained"
                 color="secondary"
                 onClick={handleUpload}
-                disabled={!selectedFiles.length || uploading || (!isOnline && !customText.trim())}
+                disabled={uploading || ((isOnline && selectedFiles.length === 0 && !customText.trim()) || (!isOnline && !customText.trim() && !selectedFiles.length))}
                 fullWidth
                 sx={{ mb: 2 }}
             >
                 {uploading ? `Uploading (${progressData.current}/${progressData.total})...` : (isOnline ? "Datei(en) hochladen" : "Offline speichern")}
-            </Button>
-            {error && <Alert severity="error" sx={{ mt: 2 }}>Error: {error}</Alert>}
-            {success && <Alert severity="success" sx={{ mt: 2 }}>{success}</Alert>}
+                </Button>
+                <Snackbar open={snackbarOpen} autoHideDuration={6000} onClose={() => setSnackbarOpen(false)}>
+                    <Alert onClose={() => setSnackbarOpen(false)} severity={snackbarSeverity} sx={{ width: '100%' }}>
+                        {snackbarMessage}
+                    </Alert>
+                </Snackbar>
         </Paper>
     );
 };

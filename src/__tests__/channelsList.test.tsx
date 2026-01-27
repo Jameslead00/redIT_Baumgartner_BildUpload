@@ -55,6 +55,8 @@ describe("ChannelsList component", () => {
         isFavorite={false}
         cachedChannels={[]}
         cachedSubFolders={{}}
+        cachedAllChannels={[]}
+        cachedAllSubFolders={{}}
       />
     );
 
@@ -86,6 +88,8 @@ describe("ChannelsList component", () => {
         isFavorite={false}
         cachedChannels={cached}
         cachedSubFolders={{}}
+        cachedAllChannels={cached}
+        cachedAllSubFolders={{}}
       />
     );
 
@@ -114,6 +118,8 @@ describe("ChannelsList component", () => {
         isFavorite={false}
         cachedChannels={[]}
         cachedSubFolders={{}}
+        cachedAllChannels={[]}
+        cachedAllSubFolders={{}}
       />
     );
 

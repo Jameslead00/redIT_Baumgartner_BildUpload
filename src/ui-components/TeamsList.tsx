@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useMsal, useAccount } from "@azure/msal-react";
 import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import { loginRequest } from "../authConfig";
@@ -6,7 +6,7 @@ import { db, Team, Channel, SubFolder } from '../db'; // Import SubFolder
 import { logToSharePoint } from "../utils/Logger";
 import ChannelsList from "./ChannelsList";
 import { postMessageToChannel, MentionUser } from "./PostMessage"; // MentionUser importieren
-import { Autocomplete, TextField, Button, Typography, Box, Alert, IconButton } from "@mui/material";
+import { Autocomplete, TextField, Button, Typography, Box, Alert, IconButton, Snackbar } from "@mui/material";
 import { Star, StarBorder } from "@mui/icons-material";
 import { checkFolderExists, createFolder, uploadLargeFile, uploadSmallFile, encodeFilesToBase64, getFolderPath } from './ImageUpload';
 
@@ -27,10 +27,18 @@ const TeamsList: React.FC = () => {
     const [offlinePosts, setOfflinePosts] = useState<any[]>([]);
     const [cachedFavorites, setCachedFavorites] = useState<any[]>([]);
     const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+    const [cachedAllTeams, setCachedAllTeams] = useState<any[]>([]);  // Neuer State für alle gecachten Teams
     
     // Neue States für Mentions
     const [teamMembers, setTeamMembers] = useState<MentionUser[]>([]);
     const [selectedMentions, setSelectedMentions] = useState<MentionUser[]>([]);
+
+    // Neue States für Snackbar
+    const [snackbarOpen, setSnackbarOpen] = useState(false);
+    const [snackbarMessage, setSnackbarMessage] = useState('');
+
+    // Ref, um zu verhindern, dass Sync mehrmals läuft
+    const hasSyncedRef = useRef(false);
 
     // Online-Status überwachen
     useEffect(() => {
@@ -66,6 +74,25 @@ const TeamsList: React.FC = () => {
         loadCachedData();
     }, []);
 
+    // Lade gecachte Teams für Offline
+    useEffect(() => {
+        const loadCachedAllTeams = async () => {
+            const cached = await db.allJoinedTeams.toArray();
+            setCachedAllTeams(cached);  // Neuer State: const [cachedAllTeams, setCachedAllTeams] = useState<any[]>([]);
+        };
+        loadCachedAllTeams();
+    }, []);
+
+    // Automatische Synchronisation, wenn online und Posts vorhanden
+    useEffect(() => {
+        if (isOnline && account && offlinePosts.length > 0 && !hasSyncedRef.current) {
+            hasSyncedRef.current = true;
+            syncOfflinePosts();
+        } else if (!isOnline || !account) {
+            hasSyncedRef.current = false; // Reset wenn offline oder nicht eingeloggt
+        }
+    }, [isOnline, account, offlinePosts.length]);
+
     useEffect(() => {
         const stored = localStorage.getItem('favoriteTeams');
         setFavorites(stored ? new Set(JSON.parse(stored)) : new Set());
@@ -91,6 +118,25 @@ const TeamsList: React.FC = () => {
                 if (graphResponse.ok) {
                     const data = await graphResponse.json();
                     setTeams(data.value);
+                    
+                    // Cache alle Teams
+                    for (const team of data.value) {
+                        await db.allJoinedTeams.put({
+                            id: team.id,
+                            displayName: team.displayName,
+                            channels: [],  // Wird später gefüllt
+                            members: [],
+                            channelSubFolders: {},
+                        });
+                    }
+                    
+                    // Entferne Teams aus Cache, die nicht mehr beigetreten sind
+                    const cachedTeamIds = await db.allJoinedTeams.toCollection().primaryKeys();
+                    const currentTeamIds = data.value.map((t: any) => t.id);
+                    const toRemove = cachedTeamIds.filter(id => !currentTeamIds.includes(id));
+                    for (const id of toRemove) {
+                        await db.allJoinedTeams.delete(id);
+                    }
                 } else {
                     setError("Failed to fetch teams");
                 }
@@ -241,6 +287,113 @@ const TeamsList: React.FC = () => {
         loadAndCacheDataForFavorites();
     }, [favorites, account, isOnline, teams]); // cachedFavorites aus Deps entfernt um Loop zu vermeiden
 
+    // Neuer useEffect für Caching von Kanälen/Mitgliedern/Subfolders für ALLE Teams (nicht nur Favoriten)
+    useEffect(() => {
+        const loadAndCacheAllTeamsDetails = async () => {
+            if (!account || !isOnline || teams.length === 0) return;
+            const request = { ...loginRequest, account };
+            const response = await instance.acquireTokenSilent(request);
+            const accessToken = response.accessToken;
+
+            for (const team of teams) {
+                const cachedTeam = await db.allJoinedTeams.get(team.id);
+                if (!cachedTeam) continue;  // Sollte nicht passieren
+                
+                let channels = cachedTeam.channels;
+                let members = cachedTeam.members;
+                let channelSubFolders = cachedTeam.channelSubFolders || {};
+                let needsUpdate = false;
+
+                // Kanäle laden (falls fehlen)
+                if (!channels || channels.length === 0) {
+                    try {
+                        const channelsResponse = await fetch(`https://graph.microsoft.com/v1.0/teams/${team.id}/channels`, {
+                            headers: { Authorization: `Bearer ${accessToken}` },
+                        });
+                        if (channelsResponse.ok) {
+                            const channelsData = await channelsResponse.json();
+                            channels = channelsData.value;
+                            needsUpdate = true;
+                        }
+                    } catch (err) {
+                        console.error(`Fehler beim Laden von Kanälen für ${team.id}:`, err);
+                    }
+                }
+
+                // Mitglieder laden (falls fehlen)
+                if (!members || members.length === 0) {
+                    try {
+                        const membersResponse = await fetch(`https://graph.microsoft.com/v1.0/teams/${team.id}/members`, {
+                            headers: { Authorization: `Bearer ${accessToken}` },
+                        });
+                        if (membersResponse.ok) {
+                            const membersData = await membersResponse.json();
+                            members = membersData.value
+                                .filter((m: any) => m.userId)
+                                .map((m: any) => ({
+                                    id: m.userId,
+                                    displayName: m.displayName
+                                }));
+                            needsUpdate = true;
+                        }
+                    } catch (err) {
+                        console.error(`Fehler beim Laden von Mitgliedern für ${team.id}:`, err);
+                    }
+                }
+
+                // Subfolders für jeden Kanal laden (falls fehlen)
+                if (channels && channels.length > 0) {
+                    try {
+                        const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/groups/${team.id}/sites/root`, {
+                            headers: { Authorization: `Bearer ${accessToken}` },
+                        });
+                        if (siteResponse.ok) {
+                            const siteData = await siteResponse.json();
+                            const siteId = siteData.id;
+
+                            for (const channel of channels) {
+                                const folderPath = getFolderPath(channel.displayName);
+                                try {
+                                    const childrenResponse = await fetch(
+                                        `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${folderPath}:/children?filter=folder ne null&select=id,name`, 
+                                        { headers: { Authorization: `Bearer ${accessToken}` } }
+                                    );
+                                    
+                                    if (childrenResponse.ok) {
+                                        const data = await childrenResponse.json();
+                                        const subs = data.value.map((item: any) => ({ id: item.id, name: item.name }));
+                                        channelSubFolders[channel.id] = subs;
+                                        needsUpdate = true;
+                                    } else if (childrenResponse.status === 404) {
+                                        channelSubFolders[channel.id] = [];
+                                        needsUpdate = true;
+                                    }
+                                } catch (e) {
+                                    console.warn(`Could not fetch subfolders for channel ${channel.displayName}`, e);
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Error fetching site ID for subfolders", e);
+                    }
+                }
+
+                // Speichere Updates
+                if (needsUpdate) {
+                    const updatedTeam = { 
+                        id: team.id, 
+                        displayName: team.displayName, 
+                        channels: channels || [],
+                        members: members || [],
+                        channelSubFolders: channelSubFolders
+                    };
+                    await db.allJoinedTeams.put(updatedTeam);
+                }
+            }
+        };
+        loadAndCacheAllTeamsDetails();
+    }, [teams, account, isOnline]);  // Läuft nach teams-Update
+
     const toggleFavorite = async (teamId: string) => {
         const newFavorites = new Set(favorites);
         if (newFavorites.has(teamId)) {
@@ -298,8 +451,13 @@ const TeamsList: React.FC = () => {
             return;
         }
         
-        // Wir suchen im State 'cachedFavorites'
-        const cachedTeam = cachedFavorites.find(f => f.id === selectedTeam.id);
+        // Zuerst in Favoriten suchen (für detailliertere Daten)
+        let cachedTeam = cachedFavorites.find(f => f.id === selectedTeam.id);
+        
+        // Wenn nicht Favorit, in allen gecachten Teams suchen
+        if (!cachedTeam) {
+            cachedTeam = cachedAllTeams.find(t => t.id === selectedTeam.id);
+        }
         
         // Prüfen ob Mitglieder im Cache sind
         if (cachedTeam?.members && cachedTeam.members.length > 0) {
@@ -310,7 +468,7 @@ const TeamsList: React.FC = () => {
             console.warn("Offline und keine Mitglieder im Cache für dieses Team.");
             setTeamMembers([]);
         }
-    }, [selectedTeam, cachedFavorites, isOnline]);
+    }, [selectedTeam, cachedFavorites, cachedAllTeams, isOnline]);  // cachedAllTeams hinzugefügt
 
     // Mitglieder laden: Teil 2 - Von API (reagiert NICHT auf cachedFavorites -> verhindert Loop)
     useEffect(() => {
@@ -385,8 +543,17 @@ const TeamsList: React.FC = () => {
     // Kombiniere online Teams mit gecachten Favoriten für Offline
     const availableTeams = useMemo(() => {
         if (isOnline && teams.length > 0) return sortedTeams;
-        return cachedFavorites.map(fav => ({ id: fav.id, displayName: fav.displayName }));  // Offline: Nur gecachte
-    }, [isOnline, teams, sortedTeams, cachedFavorites]);
+        // Offline: Sortiere gecachte Teams nach Favoriten (gleiche Logik wie sortedTeams)
+        return cachedAllTeams
+            .map(fav => ({ id: fav.id, displayName: fav.displayName }))
+            .sort((a, b) => {
+                const aFav = favorites.has(a.id);
+                const bFav = favorites.has(b.id);
+                if (aFav && !bFav) return -1;
+                if (!aFav && bFav) return 1;
+                return a.displayName.localeCompare(b.displayName);
+            });
+    }, [isOnline, teams, sortedTeams, cachedAllTeams, favorites]);
 
     // Füge syncPost Funktion hinzu (falls nicht vorhanden)
     // ÄNDERUNG: Callback Signatur angepasst
@@ -521,8 +688,9 @@ const TeamsList: React.FC = () => {
         if (uploaded) {
             await syncPost(newPost, onProgress);
         }
-        alert(`${files?.length || 0} image(s) saved ${uploaded ? 'and uploaded' : 'offline'}!`);
-        window.location.reload();  // Seite neu laden, um State zu resetten
+        // Feedback via Snackbar anstatt alert
+        setSnackbarMessage(`${files?.length || 0} image(s) saved ${uploaded ? 'and uploaded' : 'offline'}!`);
+        setSnackbarOpen(true);
         // Reset alles
         setCustomText('');
         setImageUrls([]);
@@ -535,7 +703,7 @@ const TeamsList: React.FC = () => {
     const syncOfflinePosts = async () => {
         if (!account || !isOnline || offlinePosts.length === 0) return;
         setPosting(true);
-        console.log('Starte Sync für', offlinePosts.length, 'Posts');
+        console.log('Starte automatische Sync für', offlinePosts.length, 'Posts');
         for (const post of offlinePosts) {
             try {
                 console.log('Sync Post:', post.id);
@@ -606,7 +774,9 @@ const TeamsList: React.FC = () => {
         }
         setOfflinePosts([]);
         setPosting(false);
-        alert('Alle cached Posts hochgeladen!');
+        // Feedback via Snackbar anstatt alert
+        setSnackbarMessage(`${offlinePosts.length} cached Post(s) wurden automatisch hochgeladen!`);
+        setSnackbarOpen(true);
     };
 
     const handlePostToChannel = async () => {
@@ -624,14 +794,16 @@ const TeamsList: React.FC = () => {
             // Hier uploadedFiles und selectedMentions übergeben
             await postMessageToChannel(accessToken, selectedTeam.id, selectedChannel!.id, customText, imageUrls, uploadedFiles, selectedMentions);
 
-            alert("Beitrag erfolgreich in den Kanal gepostet!");
+            setSnackbarMessage("Beitrag erfolgreich in den Kanal gepostet!");
+            setSnackbarOpen(true);
             setUploadSuccess(false);
             setCustomText("");
             setImageUrls([]);
             setUploadedFiles([]);
             setSelectedMentions([]); // Reset Mentions
         } catch (err) {
-            alert("Fehler beim Posten: " + (err instanceof Error ? err.message : "Unbekannter Fehler"));
+            setSnackbarMessage("Fehler beim Posten: " + (err instanceof Error ? err.message : "Unbekannter Fehler"));
+            setSnackbarOpen(true);
         } finally {
             setPosting(false);
         }
@@ -687,11 +859,13 @@ const TeamsList: React.FC = () => {
                         cachedChannels={cachedFavorites.find(f => f.id === selectedTeam.id)?.channels || []}
                         // FIX: Pass cachedSubFolders prop
                         cachedSubFolders={cachedFavorites.find(f => f.id === selectedTeam.id)?.channelSubFolders || {}}
+                        cachedAllChannels={cachedAllTeams.find(t => t.id === selectedTeam.id)?.channels || []}
+                        cachedAllSubFolders={cachedAllTeams.find(t => t.id === selectedTeam.id)?.channelSubFolders || {}}
                         onSaveOffline={saveOfflinePost}
                     />
                     
                     {/* UI für Mentions hinzufügen */}
-                    {isOnline && (
+                    {teamMembers.length > 0 && (
                         <Autocomplete
                             multiple
                             options={teamMembers}
@@ -725,12 +899,12 @@ const TeamsList: React.FC = () => {
                     {posting ? "Posting..." : "Beitrag in Kanal posten"}
                 </Button>
             )}
-            {/* Sync-Button immer anzeigen, wenn Posts vorhanden und online/account */}
-            {offlinePosts.length > 0 && isOnline && account && (
-                <Button onClick={syncOfflinePosts} variant="contained" sx={{ mt: 2 }} disabled={posting}>
-                    Upload ({offlinePosts.length}) cached post(s)
-                </Button>
-            )}
+            {/* Snackbar für Feedback */}
+            <Snackbar open={snackbarOpen} autoHideDuration={6000} onClose={() => setSnackbarOpen(false)}>
+                <Alert onClose={() => setSnackbarOpen(false)} severity="success" sx={{ width: '100%' }}>
+                    {snackbarMessage}
+                </Alert>
+            </Snackbar>
         </Box>
     );
 };
