@@ -838,7 +838,7 @@ const TeamsList: React.FC = () => {
                     />
                     
                     {/* UI für Mentions hinzufügen */}
-                    {isOnline && (
+                    {teamMembers.length > 0 && (
                         <Autocomplete
                             multiple
                             options={teamMembers}
