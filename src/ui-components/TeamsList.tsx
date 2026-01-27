@@ -688,8 +688,9 @@ const TeamsList: React.FC = () => {
         if (uploaded) {
             await syncPost(newPost, onProgress);
         }
-        alert(`${files?.length || 0} image(s) saved ${uploaded ? 'and uploaded' : 'offline'}!`);
-        window.location.reload();  // Seite neu laden, um State zu resetten
+        // Feedback via Snackbar anstatt alert
+        setSnackbarMessage(`${files?.length || 0} image(s) saved ${uploaded ? 'and uploaded' : 'offline'}!`);
+        setSnackbarOpen(true);
         // Reset alles
         setCustomText('');
         setImageUrls([]);
@@ -793,14 +794,16 @@ const TeamsList: React.FC = () => {
             // Hier uploadedFiles und selectedMentions übergeben
             await postMessageToChannel(accessToken, selectedTeam.id, selectedChannel!.id, customText, imageUrls, uploadedFiles, selectedMentions);
 
-            alert("Beitrag erfolgreich in den Kanal gepostet!");
+            setSnackbarMessage("Beitrag erfolgreich in den Kanal gepostet!");
+            setSnackbarOpen(true);
             setUploadSuccess(false);
             setCustomText("");
             setImageUrls([]);
             setUploadedFiles([]);
             setSelectedMentions([]); // Reset Mentions
         } catch (err) {
-            alert("Fehler beim Posten: " + (err instanceof Error ? err.message : "Unbekannter Fehler"));
+            setSnackbarMessage("Fehler beim Posten: " + (err instanceof Error ? err.message : "Unbekannter Fehler"));
+            setSnackbarOpen(true);
         } finally {
             setPosting(false);
         }
