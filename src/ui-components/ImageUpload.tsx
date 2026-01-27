@@ -596,7 +596,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
                 variant="contained"
                 color="secondary"
                 onClick={handleUpload}
-                disabled={uploading || (!isOnline && !customText.trim() && !selectedFiles.length)}
+                disabled={uploading || ((isOnline && selectedFiles.length === 0 && !customText.trim()) || (!isOnline && !customText.trim() && !selectedFiles.length))}
                 fullWidth
                 sx={{ mb: 2 }}
             >

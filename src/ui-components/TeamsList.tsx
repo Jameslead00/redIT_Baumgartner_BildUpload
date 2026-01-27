@@ -434,8 +434,13 @@ const TeamsList: React.FC = () => {
             return;
         }
         
-        // Wir suchen im State 'cachedFavorites'
-        const cachedTeam = cachedFavorites.find(f => f.id === selectedTeam.id);
+        // Zuerst in Favoriten suchen (für detailliertere Daten)
+        let cachedTeam = cachedFavorites.find(f => f.id === selectedTeam.id);
+        
+        // Wenn nicht Favorit, in allen gecachten Teams suchen
+        if (!cachedTeam) {
+            cachedTeam = cachedAllTeams.find(t => t.id === selectedTeam.id);
+        }
         
         // Prüfen ob Mitglieder im Cache sind
         if (cachedTeam?.members && cachedTeam.members.length > 0) {
@@ -446,7 +451,7 @@ const TeamsList: React.FC = () => {
             console.warn("Offline und keine Mitglieder im Cache für dieses Team.");
             setTeamMembers([]);
         }
-    }, [selectedTeam, cachedFavorites, isOnline]);
+    }, [selectedTeam, cachedFavorites, cachedAllTeams, isOnline]);  // cachedAllTeams hinzugefügt
 
     // Mitglieder laden: Teil 2 - Von API (reagiert NICHT auf cachedFavorites -> verhindert Loop)
     useEffect(() => {
