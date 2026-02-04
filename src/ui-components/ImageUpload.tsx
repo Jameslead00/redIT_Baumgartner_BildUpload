@@ -608,7 +608,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
                 fullWidth
                 sx={{ mb: 2 }}
             >
-                {uploading ? `Uploading (${progressData.current}/${progressData.total})...` : (isOnline ? "Datei(en) hochladen" : "Offline speichern")}
+                {uploading ? `Uploading (${progressData.current}/${progressData.total})...` : (isOnline ? "Beitrag hochladen" : "Offline speichern")}
                 </Button>
                 <Snackbar open={snackbarOpen} autoHideDuration={6000} onClose={() => setSnackbarOpen(false)}>
                     <Alert onClose={() => setSnackbarOpen(false)} severity={snackbarSeverity} sx={{ width: '100%' }}>
