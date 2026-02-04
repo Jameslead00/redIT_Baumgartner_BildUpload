@@ -208,8 +208,8 @@ describe('ImageUpload component (unit)', () => {
     await userEvent.upload(input, file);
     await waitFor(() => expect(screen.getByText(/image3.png/i)).toBeInTheDocument());
 
-    // Click Upload button (should be 'Datei(en) hochladen' offline = false)
-    const uploadBtn = screen.getByRole('button', { name: /Datei\(en\) hochladen/i });
+    // Click Upload button (should be 'Beitrag hochladen' offline = false)
+    const uploadBtn = screen.getByRole('button', { name: /Beitrag hochladen/i });
     expect(uploadBtn).toBeInTheDocument();
     await userEvent.click(uploadBtn);
 
@@ -274,7 +274,7 @@ describe('ImageUpload component (unit)', () => {
 
     // Click the upload button (online)
     msalStub.accounts = [{}];
-    const uploadBtn = screen.getByRole('button', { name: /Datei\(en\) hochladen/i });
+    const uploadBtn = screen.getByRole('button', { name: /Beitrag hochladen/i });
     await userEvent.click(uploadBtn);
 
     await waitFor(() => {
@@ -347,7 +347,7 @@ describe('ImageUpload component (unit)', () => {
     // Wait for file to be selected and button enabled
     await waitFor(() => expect(screen.getByText(/large.jpg/i)).toBeInTheDocument());
 
-    const uploadBtn = screen.getByRole('button', { name: /Datei\(en\) hochladen/i });
+    const uploadBtn = screen.getByRole('button', { name: /Beitrag hochladen/i });
     await userEvent.click(uploadBtn);
 
     await waitFor(() => {
@@ -432,7 +432,7 @@ describe('ImageUpload component (unit)', () => {
     const file = new File(['abc'], 'fail.jpg', { type: 'image/jpeg' });
     await userEvent.upload(input, file);
 
-    const uploadBtn = screen.getByRole('button', { name: /Datei\(en\) hochladen/i });
+    const uploadBtn = screen.getByRole('button', { name: /Beitrag hochladen/i });
     await userEvent.click(uploadBtn);
 
     // Should show error message (we can check for console.error or UI error state if implemented)
