@@ -578,13 +578,31 @@ describe("TeamsList component", () => {
     });
   });
 
-  test('handlePostToChannel posts message directly when online', async () => {
+  test('saveOfflinePost uploads and posts directly when online (single post, no duplicate)', async () => {
+    const dbModule = require('../db');
+    jest.clearAllMocks();
+
+    // Reset the DB mocks for a clean test
+    dbModule.db.posts.add.mockResolvedValue(99);
+    dbModule.db.posts.delete.mockResolvedValue(undefined);
+    dbModule.db.images.add.mockResolvedValue(undefined);
+    dbModule.db.images.where.mockReturnValue({
+        equals: jest.fn(() => ({
+            toArray: jest.fn().mockResolvedValue([{ file: new File(['a'], 'a.png', { type: 'image/png' }) }]),
+            delete: jest.fn().mockResolvedValue(undefined),
+        }))
+    });
+    // No cached offline posts (to avoid auto-sync interference)
+    dbModule.db.posts.toArray.mockResolvedValue([]);
+
     (msal.useMsal as jest.Mock).mockReturnValue({ instance: { acquireTokenSilent: jest.fn().mockResolvedValue({ accessToken: 'mock-token' }) }, accounts: [{}] });
     (msal.useAccount as jest.Mock).mockReturnValue({ name: 'User', username: 'u@test' });
 
-    (global as any).fetch.mockImplementation((input: RequestInfo) => {
+    (global as any).fetch = jest.fn().mockImplementation((input: RequestInfo) => {
         const url = typeof input === 'string' ? input : (input as any).url;
         if (url.includes('/me/joinedTeams')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: teams }) });
+        if (url.includes('/sites/root')) return Promise.resolve({ ok: true, json: async (): Promise<{ id: string }> => ({ id: 'siteId' }) });
+        if (url.includes('/drive/root:/')) return Promise.resolve({ ok: true, json: async () => ({ webUrl: 'https://uploaded-url' }) });
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }) });
     });
 
@@ -606,22 +624,15 @@ describe("TeamsList component", () => {
     });
     await new Promise((r) => setTimeout(r, 0));
 
-    // Simulate Upload Success (sets customText and imageUrls)
     props = (global as any).__lastChannelsListProps;
     await act(async () => {
-        // Trigger the simulate-upload-success button in mock
-        const btn = screen.getByTestId('simulate-upload-success');
-        btn.click();
+      await props.onSaveOffline([new File(['a'], 'a.png', { type: 'image/png' })], '');
     });
 
-    // Find "Beitrag in Kanal posten" button
-    const postButton = await screen.findByText(/Beitrag in Kanal posten/i);
-    await userEvent.click(postButton);
-
+    // Post should be called exactly once (no duplicate)
     await waitFor(() => {
-        expect(postMessageToChannel).toHaveBeenCalledWith(
-            'mock-token', 't1', 'c1', 'Test Message', ['https://url'], expect.any(Array), expect.any(Array)
-        );
-    });
+        expect(postMessageToChannel).toHaveBeenCalledTimes(1);
+        expect(dbModule.db.posts.delete).toHaveBeenCalledWith(99);
+    }, { timeout: 3000 });
   });
 });

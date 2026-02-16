@@ -450,18 +450,19 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
                 setUploading(true);
                 setProgressData({ current: 0, total: selectedFiles.length, percent: 0 });
                 try {
-                    // Callback aktualisiert jetzt current und total
-                    // Pass selectedSubFolder
                     await onSaveOffline(selectedFiles, selectedSubFolder, (current, total) => {
-                        // ÄNDERUNG: Prozentsatz basierend auf abgeschlossenen Bildern (current - 1)
-                        // Beispiel bei 4 Bildern:
-                        // Bild 1 startet -> (0/4)*100 = 0%
-                        // Bild 2 startet -> (1/4)*100 = 25%
                         const percent = Math.round(((current - 1) / total) * 100);
                         setProgressData({ current, total, percent });
                     });
+                    // Erfolgreich: lokale State zurücksetzen
+                    setSelectedFiles([]);
+                    setThumbnails([]);
                 } catch (e) {
                     console.error(e);
+                    setSnackbarMessage(t('upload.uploadFailed'));
+                    setSnackbarSeverity('error');
+                    setSnackbarOpen(true);
+                } finally {
                     setUploading(false);
                 }
             } else {

@@ -683,12 +683,15 @@ const TeamsList: React.FC = () => {
             }
         }
         const newPost = { ...post, id: postId };
-        setOfflinePosts([...offlinePosts, newPost]);
 
-        // Neu: Wenn Online, sync nur diesen Post automatisch (ohne await)
+        // Wenn Online, sync sofort — OHNE den offlinePosts State zu aktualisieren,
+        // damit der Auto-Sync useEffect nicht nochmal denselben Post synct.
         const uploaded = isOnline && account;
         if (uploaded) {
             await syncPost(newPost, onProgress);
+        } else {
+            // Offline: zum State hinzufügen, damit Auto-Sync greift wenn wieder online
+            setOfflinePosts([...offlinePosts, newPost]);
         }
         // Feedback via Snackbar anstatt alert
         setSnackbarMessage(t(uploaded ? 'teams.imagesSavedAndUploaded' : 'teams.imagesSavedOffline', { count: files?.length || 0 }));
@@ -781,35 +784,7 @@ const TeamsList: React.FC = () => {
         setSnackbarOpen(true);
     };
 
-    const handlePostToChannel = async () => {
-        // ÄNDERUNG: Erlaube leeren Text, wenn Bilder vorhanden sind
-        if (!account || !selectedTeam || !selectedChannel || (!customText && imageUrls.length === 0)) return;
 
-        setPosting(true);
-
-        const request = { ...loginRequest, account };
-
-        try {
-            const response = await instance.acquireTokenSilent(request);
-            const accessToken = response.accessToken;
-
-            // Hier uploadedFiles und selectedMentions übergeben
-            await postMessageToChannel(accessToken, selectedTeam.id, selectedChannel!.id, customText, imageUrls, uploadedFiles, selectedMentions);
-
-            setSnackbarMessage(t('teams.postSuccess'));
-            setSnackbarOpen(true);
-            setUploadSuccess(false);
-            setCustomText("");
-            setImageUrls([]);
-            setUploadedFiles([]);
-            setSelectedMentions([]); // Reset Mentions
-        } catch (err) {
-            setSnackbarMessage(t('teams.postError') + (err instanceof Error ? err.message : t('teams.unknownError')));
-            setSnackbarOpen(true);
-        } finally {
-            setPosting(false);
-        }
-    };
 
    
 
@@ -889,18 +864,7 @@ const TeamsList: React.FC = () => {
                     )}
                 </>
             )}
-            {/* ÄNDERUNG: Button anzeigen auch ohne Text, wenn Upload erfolgreich war */}
-            {selectedChannel && (customText.trim() || imageUrls.length > 0) && isOnline && account && (
-                <Button
-                    variant="contained"
-                    color="primary"
-                    onClick={handlePostToChannel}
-                    disabled={posting}
-                    sx={{ mt: 2 }}
-                >
-                    {posting ? t('teams.posting') : t('teams.postToChannel')}
-                </Button>
-            )}
+
             {/* Snackbar für Feedback */}
             <Snackbar open={snackbarOpen} autoHideDuration={6000} onClose={() => setSnackbarOpen(false)}>
                 <Alert onClose={() => setSnackbarOpen(false)} severity="success" sx={{ width: '100%' }}>
