@@ -72,5 +72,10 @@
         "suiteNameTemplate": "TypeScript Sample Tests",
         "outputDirectory": ".",
         "outputName": "test-results.xml"
+    },
+    "overrides": {
+        "react-i18next": {
+            "typescript": "$typescript"
+        }
     }
 }
