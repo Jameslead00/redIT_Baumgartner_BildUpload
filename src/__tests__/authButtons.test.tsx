@@ -29,7 +29,7 @@ describe("Auth button components", () => {
 
     render(<SignInButton />);
 
-    const loginBtn = screen.getByText(/Login/i);
+    const loginBtn = screen.getByText(/Anmelden/i);
     expect(loginBtn).toBeInTheDocument();
 
     await userEvent.click(loginBtn);
@@ -73,7 +73,7 @@ describe("Auth button components", () => {
 
     rerender(<SignInSignOutButton />);
     // Should show SignIn button now
-    expect(screen.getByText(/Login/i)).toBeInTheDocument();
+    expect(screen.getByText(/Anmelden/i)).toBeInTheDocument();
 
     // Simulate inProgress equal to Startup -> should return null
     (msal.useIsAuthenticated as jest.Mock).mockReturnValue(false);
@@ -82,7 +82,7 @@ describe("Auth button components", () => {
     rerender(<SignInSignOutButton />);
     // Login should not be present
     await waitFor(() => {
-      expect(screen.queryByText(/Login/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Anmelden/i)).not.toBeInTheDocument();
       expect(screen.queryByRole("button")).toBeNull(); // no sign in/out button
     });
   });

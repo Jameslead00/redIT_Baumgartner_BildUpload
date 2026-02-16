@@ -1,4 +1,5 @@
 import React from 'react';
+import i18n from '../i18n/i18n';
 
 // Interface für Benutzer-Erwähnungen
 export interface MentionUser {
@@ -156,7 +157,7 @@ export const postMessageToChannel = async (
                 <img src="../hostedContents/${id}/$value" style="max-width: 100%; width: auto; border-radius: 4px; display: block;" alt="Image ${index + 1}">
                 <div style="margin-top: 4px;">
                     <a href="${oneDriveUrl}" target="_blank" style="font-size: 12px; color: #5b5fc7; text-decoration: none;">
-                        Original anzeigen ↗
+                        ${(i18n as any).t('postMessage.viewOriginal')}
                     </a>
                 </div>
             </div>`;
@@ -166,7 +167,7 @@ export const postMessageToChannel = async (
     // Wir nutzen <p> für den Text-Block
     const textContent = mentionsHtml 
         ? `<p>${mentionsHtml} ${escapeHtml(customText || "")}</p>` 
-        : `<p style="font-size: 14px; font-weight: bold; margin-bottom: 12px;">${escapeHtml(customText || "Neue Bilder hochgeladen: ")}</p>`;
+        : `<p style="font-size: 14px; font-weight: bold; margin-bottom: 12px;">${escapeHtml(customText || (i18n as any).t('postMessage.newImagesUploaded'))}</p>`;
 
     const messagePayload = {
         body: {

@@ -5,6 +5,7 @@ import { loginRequest } from "../authConfig";
 import ImageUpload from "./ImageUpload";
 import { Grid, Card, CardActionArea, CardContent, Typography, Box } from "@mui/material";
 import { SubFolder } from '../db'; // Import SubFolder
+import { useTranslation } from "react-i18next";
 
 interface Team {
     id: string;
@@ -43,6 +44,7 @@ const ChannelsList: React.FC<ChannelsListProps> = ({
     cachedAllChannels = [], // Neue Prop
     cachedAllSubFolders = {}, // Neue Prop
 }) => {
+    const { t } = useTranslation();
     const { instance, accounts } = useMsal();
     const account = useAccount(accounts[0] || {});
     const [channels, setChannels] = useState<Channel[]>([]);
@@ -85,7 +87,7 @@ const ChannelsList: React.FC<ChannelsListProps> = ({
                     const data = await graphResponse.json();
                     setChannels(data.value);
                 } else {
-                    setError("Failed to fetch channels");
+                    setError(t('channels.fetchChannelsFailure'));
                 }
             } catch (err) {
                 if (err instanceof InteractionRequiredAuthError) {
@@ -96,7 +98,7 @@ const ChannelsList: React.FC<ChannelsListProps> = ({
                         }).then((res) => res.json()).then((data) => setChannels(data.value));
                     });
                 } else {
-                    setError("Error fetching channels");
+                    setError(t('channels.fetchChannelsError'));
                 }
             } finally {
                 setLoading(false);
@@ -111,13 +113,13 @@ const ChannelsList: React.FC<ChannelsListProps> = ({
         onChannelSelect(channel);
     };
 
-    if (loading && account && isOnline) return <Typography variant="h6">Loading channels...</Typography>;  // Nur laden, wenn account und online
-    if (error) return <Typography variant="h6" color="error">Error: {error}</Typography>;
+    if (loading && account && isOnline) return <Typography variant="h6">{t('channels.loadingChannels')}</Typography>;  // Nur laden, wenn account und online
+    if (error) return <Typography variant="h6" color="error">{t('teams.errorPrefix')}{error}</Typography>;
 
     return (
         <Box sx={{ mt: 3 }}>
             <Typography variant="h6" gutterBottom>
-                Kanal auswählen ({isOnline && account ? 'Online' : 'Offline gecacht'})
+                {t('channels.selectChannel')} ({isOnline && account ? t('teams.onlineStatus') : t('teams.offlineCached')})
             </Typography>
             <Grid container spacing={2}>
                 {channels.map((channel) => (

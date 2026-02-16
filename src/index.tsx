@@ -5,6 +5,7 @@ import { ThemeProvider } from "@mui/material/styles";
 import { theme } from "./styles/theme";
 import App from "./App";
 import "./styles.css";
+import "./i18n/i18n"; // i18n Initialisierung
 import * as serviceWorkerRegistration from "../src/serviceWorkerRegistration";
 
 // MSAL imports

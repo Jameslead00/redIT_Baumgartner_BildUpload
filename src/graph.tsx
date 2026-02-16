@@ -1,5 +1,6 @@
 import React from "react";
 import { graphConfig } from "./authConfig";
+import { useTranslation } from "react-i18next";
 
 export async function callMsGraph(accessToken: string) {
     const headers = new Headers();
@@ -18,12 +19,13 @@ export async function callMsGraph(accessToken: string) {
 }
 
 export const ProfileData = (props: any) => {
+    const { t } = useTranslation();
     return (
         <div id="profile-div">
-            <p><strong>Title: </strong> {props.graphData.jobTitle}</p>
-            <p><strong>Mail: </strong> {props.graphData.mail}</p>
-            <p><strong>Phone: </strong> {props.graphData.businessPhones[0]}</p>
-            <p><strong>Location: </strong> {props.graphData.officeLocation}</p>
+            <p><strong>{t('profile.title')}: </strong> {props.graphData.jobTitle}</p>
+            <p><strong>{t('profile.mail')}: </strong> {props.graphData.mail}</p>
+            <p><strong>{t('profile.phone')}: </strong> {props.graphData.businessPhones[0]}</p>
+            <p><strong>{t('profile.location')}: </strong> {props.graphData.officeLocation}</p>
         </div>
     );
 };

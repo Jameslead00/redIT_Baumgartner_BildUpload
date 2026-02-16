@@ -1,6 +1,22 @@
 // src/setupTests.ts
 import '@testing-library/jest-dom';
 
+// Initialize i18n for tests with German as default language
+import i18n from 'i18next';
+import { initReactI18next } from 'react-i18next';
+import de from './i18n/de.json';
+import fr from './i18n/fr.json';
+
+i18n.use(initReactI18next).init({
+  resources: {
+    de: { translation: de },
+    fr: { translation: fr },
+  },
+  lng: 'de',
+  fallbackLng: 'de',
+  interpolation: { escapeValue: false },
+});
+
 // Ensure fetch available
 if (!(global as any).fetch) {
   (global as any).fetch = jest.fn();

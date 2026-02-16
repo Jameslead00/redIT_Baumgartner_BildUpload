@@ -1,6 +1,7 @@
 import { Routes, Route, useNavigate } from "react-router-dom";
 // Material-UI imports
 import { Container, Paper, Typography, Box } from "@mui/material";
+import { useTranslation } from "react-i18next";
 
 // MSAL imports
 import { MsalProvider } from "@azure/msal-react";
@@ -17,6 +18,7 @@ type AppProps = {
 };
 
 function App({ pca }: AppProps) {
+    const { t } = useTranslation();
     // The next 3 lines are optional. This is how you configure MSAL to take advantage of the router's navigate functions when MSAL redirects between pages in your app
     const navigate = useNavigate();
     const navigationClient = new CustomNavigationClient(navigate);
@@ -29,10 +31,10 @@ function App({ pca }: AppProps) {
                     <Paper elevation={3} sx={{ p: 3, borderRadius: 2 }}>
                         <Box sx={{ textAlign: 'center', mb: 3 }}>
                             <Typography variant="h4" component="h1" gutterBottom>
-                                Bild Upload
+                                {t('app.title')}
                             </Typography>
                             <Typography variant="body1" color="text.secondary">
-                                Lade Bilder und Beiträge in Microsoft Teams Kanäle hoch.
+                                {t('app.description')}
                             </Typography>
                         </Box>
                         <TeamsList />

@@ -9,8 +9,10 @@ import { postMessageToChannel, MentionUser } from "./PostMessage"; // MentionUse
 import { Autocomplete, TextField, Button, Typography, Box, Alert, IconButton, Snackbar } from "@mui/material";
 import { Star, StarBorder } from "@mui/icons-material";
 import { checkFolderExists, createFolder, uploadLargeFile, uploadSmallFile, encodeFilesToBase64, getFolderPath } from './ImageUpload';
+import { useTranslation } from "react-i18next";
 
 const TeamsList: React.FC = () => {
+    const { t } = useTranslation();
     const { instance, accounts } = useMsal();
     const account = useAccount(accounts[0] || {});
     const [teams, setTeams] = useState<Team[]>([]);
@@ -138,7 +140,7 @@ const TeamsList: React.FC = () => {
                         await db.allJoinedTeams.delete(id);
                     }
                 } else {
-                    setError("Failed to fetch teams");
+                    setError(t('teams.fetchTeamsFailure'));
                 }
             } catch (err) {
                 if (err instanceof InteractionRequiredAuthError) {
@@ -149,7 +151,7 @@ const TeamsList: React.FC = () => {
                         }).then((res) => res.json()).then((data) => setTeams(data.value));
                     });
                 } else {
-                    setError("Error fetching teams");
+                    setError(t('teams.fetchTeamsError'));
                 }
             } finally {
                 setLoading(false);
@@ -681,15 +683,18 @@ const TeamsList: React.FC = () => {
             }
         }
         const newPost = { ...post, id: postId };
-        setOfflinePosts([...offlinePosts, newPost]);
 
-        // Neu: Wenn Online, sync nur diesen Post automatisch (ohne await)
+        // Wenn Online, sync sofort — OHNE den offlinePosts State zu aktualisieren,
+        // damit der Auto-Sync useEffect nicht nochmal denselben Post synct.
         const uploaded = isOnline && account;
         if (uploaded) {
             await syncPost(newPost, onProgress);
+        } else {
+            // Offline: zum State hinzufügen, damit Auto-Sync greift wenn wieder online
+            setOfflinePosts([...offlinePosts, newPost]);
         }
         // Feedback via Snackbar anstatt alert
-        setSnackbarMessage(`${files?.length || 0} image(s) saved ${uploaded ? 'and uploaded' : 'offline'}!`);
+        setSnackbarMessage(t(uploaded ? 'teams.imagesSavedAndUploaded' : 'teams.imagesSavedOffline', { count: files?.length || 0 }));
         setSnackbarOpen(true);
         // Reset alles
         setCustomText('');
@@ -775,56 +780,28 @@ const TeamsList: React.FC = () => {
         setOfflinePosts([]);
         setPosting(false);
         // Feedback via Snackbar anstatt alert
-        setSnackbarMessage(`${offlinePosts.length} cached Post(s) wurden automatisch hochgeladen!`);
+        setSnackbarMessage(t('teams.cachedPostsSynced', { count: offlinePosts.length }));
         setSnackbarOpen(true);
     };
 
-    const handlePostToChannel = async () => {
-        // ÄNDERUNG: Erlaube leeren Text, wenn Bilder vorhanden sind
-        if (!account || !selectedTeam || !selectedChannel || (!customText && imageUrls.length === 0)) return;
 
-        setPosting(true);
-
-        const request = { ...loginRequest, account };
-
-        try {
-            const response = await instance.acquireTokenSilent(request);
-            const accessToken = response.accessToken;
-
-            // Hier uploadedFiles und selectedMentions übergeben
-            await postMessageToChannel(accessToken, selectedTeam.id, selectedChannel!.id, customText, imageUrls, uploadedFiles, selectedMentions);
-
-            setSnackbarMessage("Beitrag erfolgreich in den Kanal gepostet!");
-            setSnackbarOpen(true);
-            setUploadSuccess(false);
-            setCustomText("");
-            setImageUrls([]);
-            setUploadedFiles([]);
-            setSelectedMentions([]); // Reset Mentions
-        } catch (err) {
-            setSnackbarMessage("Fehler beim Posten: " + (err instanceof Error ? err.message : "Unbekannter Fehler"));
-            setSnackbarOpen(true);
-        } finally {
-            setPosting(false);
-        }
-    };
 
    
 
-    if (loading && account && isOnline) return <Typography variant="h6">Loading teams...</Typography>;  // Nur laden, wenn account und online
-    if (error) return <Alert severity="error">Error: {error}</Alert>;
+    if (loading && account && isOnline) return <Typography variant="h6">{t('teams.loadingTeams')}</Typography>;  // Nur laden, wenn account und online
+    if (error) return <Alert severity="error">{t('teams.errorPrefix')}{error}</Alert>;
 
     return (
         <Box sx={{ mt: 3 }}>
             {/* Offline-Hinweis */}
             {(!isOnline || !account) && (
                 <Alert severity="warning" sx={{ mb: 2 }}>
-                    {!isOnline ? 'Offline-Modus: Eingaben werden lokal gespeichert.' : 'Nicht eingeloggt: Eingaben werden lokal gespeichert.'}
+                    {!isOnline ? t('teams.offlineMode') : t('teams.notLoggedIn')}
                 </Alert>
             )}
 
             <Typography variant="h5" gutterBottom>
-                Team auswählen ({isOnline && account ? 'Online' : 'Offline gecacht'})
+                {t('teams.selectTeam')} ({isOnline && account ? t('teams.onlineStatus') : t('teams.offlineCached')})
             </Typography>
             <Autocomplete
                 options={availableTeams}  // Zeigt gecachte Teams, wenn nicht eingeloggt
@@ -839,7 +816,7 @@ const TeamsList: React.FC = () => {
                         {option.displayName}
                     </Box>
                 )}
-                renderInput={(params) => <TextField {...params} label="Search teams" variant="outlined" />}
+                renderInput={(params) => <TextField {...params} label={t('teams.searchTeams')} variant="outlined" />}
                 sx={{ mb: 2 }}
             />
             {selectedTeam && (
@@ -877,8 +854,8 @@ const TeamsList: React.FC = () => {
                             renderInput={(params) => (
                                 <TextField 
                                     {...params} 
-                                    label="Personen erwähnen (@)" 
-                                    placeholder="Namen eingeben..." 
+                                    label={t('teams.mentionLabel')} 
+                                    placeholder={t('teams.mentionPlaceholder')} 
                                     variant="outlined"
                                 />
                             )}
@@ -887,18 +864,7 @@ const TeamsList: React.FC = () => {
                     )}
                 </>
             )}
-            {/* ÄNDERUNG: Button anzeigen auch ohne Text, wenn Upload erfolgreich war */}
-            {selectedChannel && (customText.trim() || imageUrls.length > 0) && isOnline && account && (
-                <Button
-                    variant="contained"
-                    color="primary"
-                    onClick={handlePostToChannel}
-                    disabled={posting}
-                    sx={{ mt: 2 }}
-                >
-                    {posting ? "Posting..." : "Beitrag in Kanal posten"}
-                </Button>
-            )}
+
             {/* Snackbar für Feedback */}
             <Snackbar open={snackbarOpen} autoHideDuration={6000} onClose={() => setSnackbarOpen(false)}>
                 <Alert onClose={() => setSnackbarOpen(false)} severity="success" sx={{ width: '100%' }}>
