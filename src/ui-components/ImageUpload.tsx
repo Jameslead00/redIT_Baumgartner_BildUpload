@@ -8,6 +8,7 @@ import { db } from '../db';
 import { logToSharePoint } from "../utils/Logger";
 import { UploadProgress } from "./UploadProgress";
 import { SubFolder } from '../db'; // Import shared interface
+import { useTranslation } from "react-i18next";
 
 export interface Team {
     id: string;
@@ -231,6 +232,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
     cachedSubFolders = [], // Default empty
     initialSelectedSubFolder = "" // New prop for testing
 }) => {
+    const { t } = useTranslation();
     const { instance, accounts } = useMsal();
     const account = useAccount(accounts[0] || {});
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -417,7 +419,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
             // Schritt 6: Erfolgreich hochgeladen - Callback aufrufen
             onUploadSuccess(imageUrls, selectedFiles, base64Images);  // base64Images übergeben
             // Zeige Snackbar anstatt Inline-Alert
-            setSnackbarMessage(`${selectedFiles.length} image(s) uploaded successfully!`);
+            setSnackbarMessage(t('upload.uploadSuccess', { count: selectedFiles.length }));
             setSnackbarSeverity('success');
             setSnackbarOpen(true);
         } catch (err) {
@@ -431,7 +433,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
             if (err instanceof InteractionRequiredAuthError) {
                 // Optional: handle interaction required (e.g., trigger login)
             } else {
-                const msg = err instanceof Error ? err.message : "Upload failed";
+                const msg = err instanceof Error ? err.message : t('upload.uploadFailed');
                 setError(msg);
                 setSnackbarMessage(msg);
                 setSnackbarSeverity('error');
@@ -470,7 +472,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
                 // Pass selectedSubFolder
                 await onSaveOffline(selectedFiles, selectedSubFolder);
             }
-            setSnackbarMessage(`${selectedFiles.length} image(s) saved offline!`);
+            setSnackbarMessage(t('upload.savedOffline', { count: selectedFiles.length }));
             setSnackbarSeverity('success');
             setSnackbarOpen(true);
             setSelectedFiles([]);
@@ -481,21 +483,21 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
     return (
         <Paper elevation={1} sx={{ p: 2, mt: 2 }}>
             <Typography variant="h6" gutterBottom>
-                Bilder hochladen in Ordner "Bilder"
+                {t('upload.title')}
             </Typography>
             
             {/* FIX: Show if online (even if empty, to show "None found") OR if we have cached subfolders */}
             {(isOnline || subFolders.length > 0) && (
                 <FormControl fullWidth variant="outlined" sx={{ mb: 2 }} disabled={loadingFolders || (subFolders.length === 0 && !isOnline)}>
-                    <InputLabel id="subfolder-select-label">Unterordner auswählen (Optional)</InputLabel>
+                    <InputLabel id="subfolder-select-label">{t('upload.subfolderLabel')}</InputLabel>
                     <Select
                         labelId="subfolder-select-label"
                         value={selectedSubFolder}
                         onChange={(e: SelectChangeEvent) => setSelectedSubFolder(e.target.value as string)}
-                        label="Unterordner auswählen (Optional)"
+                        label={t('upload.subfolderLabel')}
                     >
                         <MenuItem value="">
-                            <em>Kein Unterordner (Direkt in "Bilder")</em>
+                            <em>{t('upload.noSubfolder')}</em>
                         </MenuItem>
                         {subFolders.map((folder) => (
                             <MenuItem key={folder.id} value={folder.name}>
@@ -505,7 +507,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
                     </Select>
                     {subFolders.length === 0 && !loadingFolders && (
                         <Typography variant="caption" color="textSecondary" sx={{ ml: 1, mt: 0.5 }}>
-                            {isOnline ? "Keine Unterordner gefunden." : "Keine gecachten Unterordner verfügbar."}
+                            {isOnline ? t('upload.noSubfoldersFound') : t('upload.noSubfoldersCached')}
                         </Typography>
                     )}
                 </FormControl>
@@ -526,13 +528,13 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
                     onClick={handleFileSelect}
                     sx={{ flexGrow: 1, mr: 1 }}
                 >
-                    {selectedFiles.length > 0 ? `${selectedFiles.length} Datei(en) ausgewählt` : "Dateien auswählen"}
+                    {selectedFiles.length > 0 ? t('upload.filesSelected', { count: selectedFiles.length }) : t('upload.selectFiles')}
                 </Button>
                 {selectedFiles.length > 0 && (
                     <IconButton
                         color="error"
                         onClick={handleRemoveSelection}
-                        title="Alle entfernen"
+                        title={t('upload.removeAll')}
                     >
                         <DeleteIcon />
                     </IconButton>
@@ -563,7 +565,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
                                                 backgroundColor: 'rgba(255, 255, 255, 0.8)',
                                                 '&:hover': { backgroundColor: 'rgba(255, 255, 255, 1)' }
                                             }}
-                                            title="Entfernen"
+                                            title={t('upload.remove')}
                                         >
                                             <DeleteIcon fontSize="small" />
                                         </IconButton>
@@ -585,7 +587,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
             {/* TextField immer anzeigen, auch ohne Dateien */}
             <TextField
                 fullWidth
-                label="Nachricht zum Beitrag hinzufügen"
+                label={t('upload.messageLabel')}
                 value={customText}
                 onChange={(e) => onCustomTextChange(e.target.value)}
                 variant="outlined"
@@ -608,7 +610,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
                 fullWidth
                 sx={{ mb: 2 }}
             >
-                {uploading ? `Uploading (${progressData.current}/${progressData.total})...` : (isOnline ? "Beitrag hochladen" : "Offline speichern")}
+                {uploading ? t('upload.uploading', { current: progressData.current, total: progressData.total }) : (isOnline ? t('upload.uploadButton') : t('upload.saveOffline'))}
                 </Button>
                 <Snackbar open={snackbarOpen} autoHideDuration={6000} onClose={() => setSnackbarOpen(false)}>
                     <Alert onClose={() => setSnackbarOpen(false)} severity={snackbarSeverity} sx={{ width: '100%' }}>

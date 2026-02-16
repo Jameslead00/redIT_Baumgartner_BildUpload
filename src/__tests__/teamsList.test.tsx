@@ -200,11 +200,11 @@ describe("TeamsList component", () => {
 
     // Wait for teams to load and component to render properly
     await waitFor(() => {
-      expect(screen.queryByText(/Loading teams/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Teams werden geladen/i)).not.toBeInTheDocument();
     }, { timeout: 5000 });
 
     // Find the Autocomplete input
-    const input = await screen.findByLabelText(/Search teams/i);
+    const input = await screen.findByLabelText(/Teams suchen/i);
 
     // Better approach for MUI Autocomplete: type and press arrow/enter to select an option
     await userEvent.click(input); // focus
@@ -240,11 +240,11 @@ describe("TeamsList component", () => {
 
     // Wait for teams to load
     await waitFor(() => {
-      expect(screen.getByLabelText(/Search teams/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/Teams suchen/i)).toBeInTheDocument();
     });
 
     // Select team
-    const input = await screen.findByLabelText(/Search teams/i);
+    const input = await screen.findByLabelText(/Teams suchen/i);
     await userEvent.click(input);
     await userEvent.type(input, 'Team One');
     await userEvent.keyboard('{ArrowDown}{Enter}');
@@ -296,7 +296,7 @@ describe("TeamsList component", () => {
 
     render(<TeamsList />);
 
-    const input = await screen.findByLabelText(/Search teams/i);
+    const input = await screen.findByLabelText(/Teams suchen/i);
     await userEvent.click(input);
 
     // Wait for options to appear, then find the desired option
@@ -339,7 +339,7 @@ describe("TeamsList component", () => {
     render(<TeamsList />);
 
     // Wait for Autocomplete to appear then open options
-    const input = await screen.findByLabelText(/Search teams/i);
+    const input = await screen.findByLabelText(/Teams suchen/i);
     await userEvent.click(input);
     await userEvent.type(input, 'Team One');
     await userEvent.keyboard('{ArrowDown}{Enter}');
@@ -372,7 +372,7 @@ describe("TeamsList component", () => {
     render(<TeamsList />);
 
     // open autocomplete
-    const input = await screen.findByLabelText(/Search teams/i);
+    const input = await screen.findByLabelText(/Teams suchen/i);
     await userEvent.click(input);
     // Because cached term is 'Team One', it should show as an option
     await waitFor(() => expect(screen.getByText(/Team One/i)).toBeInTheDocument());
@@ -434,7 +434,7 @@ describe("TeamsList component", () => {
     render(<TeamsList />);
 
     // select the team
-    const input = await screen.findByLabelText(/Search teams/i);
+    const input = await screen.findByLabelText(/Teams suchen/i);
     await userEvent.click(input);
     await userEvent.type(input, 'Team One');
     await userEvent.keyboard('{ArrowDown}{Enter}');
@@ -463,7 +463,7 @@ describe("TeamsList component", () => {
 
     render(<TeamsList />);
 
-    const input = await screen.findByLabelText(/Search teams/i);
+    const input = await screen.findByLabelText(/Teams suchen/i);
     await userEvent.click(input);
     await userEvent.type(input, 'Team One');
     await userEvent.keyboard('{ArrowDown}{Enter}');
@@ -518,7 +518,7 @@ describe("TeamsList component", () => {
 
     render(<TeamsList />);
 
-    const input = await screen.findByLabelText(/Search teams/i);
+    const input = await screen.findByLabelText(/Teams suchen/i);
     await userEvent.click(input);
     await userEvent.type(input, 'Team One');
     await userEvent.keyboard('{ArrowDown}{Enter}');
@@ -593,7 +593,7 @@ describe("TeamsList component", () => {
     render(<TeamsList />);
 
     // Select Team
-    const input = await screen.findByLabelText(/Search teams/i);
+    const input = await screen.findByLabelText(/Teams suchen/i);
     await userEvent.click(input);
     await userEvent.type(input, 'Team One');
     await userEvent.keyboard('{ArrowDown}{Enter}');

@@ -27,18 +27,18 @@ jest.mock('../ui-components/SignInSignOutButton', () => ({
 describe('Small UI components', () => {
   test('ErrorComponent displays error code', () => {
     render(<ErrorComponent error={{ errorMessage: 'x', errorCode: 'E1' } as any} />);
-    expect(screen.getByText(/An Error Occurred/i)).toBeInTheDocument();
+    expect(screen.getByText(/Ein Fehler ist aufgetreten/i)).toBeInTheDocument();
     expect(screen.getByText(/E1/)).toBeInTheDocument();
   });
 
   test('ErrorComponent shows unknown if undefined', () => {
     render(<ErrorComponent error={undefined as any} />);
-    expect(screen.getByText(/unknown error/i)).toBeInTheDocument();
+    expect(screen.getByText(/Unbekannter Fehler/i)).toBeInTheDocument();
   });
 
   test('Loading displays text', () => {
     render(<Loading />);
-    expect(screen.getByText(/Authentication in progress/i)).toBeInTheDocument();
+    expect(screen.getByText(/Authentifizierung läuft/i)).toBeInTheDocument();
   });
 
   test('PageLayout renders children and NavBar', () => {
@@ -81,8 +81,8 @@ describe('ProfileData & theme tests', () => {
     render(<ProfileData graphData={data as any} />);
     expect(screen.getByText(/Name/i)).toBeInTheDocument();
     expect(screen.getByText(/Manager/)).toBeInTheDocument();
-    expect(screen.getByText(/Mail/)).toBeInTheDocument();
-    expect(screen.getByText(/Phone/)).toBeInTheDocument();
+    expect(screen.getByText(/E-Mail/)).toBeInTheDocument();
+    expect(screen.getByText(/Telefon/)).toBeInTheDocument();
   });
 
   test('theme object contains primary colors', () => {

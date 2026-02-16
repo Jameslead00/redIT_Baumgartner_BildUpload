@@ -124,8 +124,8 @@ describe("ChannelsList component", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/Error:/i)).toBeInTheDocument();
-      expect(screen.getByText(/Failed to fetch channels/i)).toBeInTheDocument();
+      expect(screen.getByText(/Fehler/i)).toBeInTheDocument();
+      expect(screen.getByText(/Kanäle konnten nicht geladen werden/i)).toBeInTheDocument();
     });
   });
 });

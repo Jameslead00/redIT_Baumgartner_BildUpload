@@ -1,0 +1,80 @@
+{
+  "app": {
+    "title": "Téléchargement d'images",
+    "description": "Téléchargez des images et des publications dans les canaux Microsoft Teams."
+  },
+  "navbar": {
+    "appTitle": "Baumgartner Fenster",
+    "online": "online",
+    "offline": "offline"
+  },
+  "auth": {
+    "login": "Connexion",
+    "authInProgress": "Authentification en cours..."
+  },
+  "teams": {
+    "selectTeam": "Sélectionner une team",
+    "onlineStatus": "En ligne",
+    "offlineCached": "Cache offline",
+    "searchTeams": "Rechercher des teams",
+    "loadingTeams": "Chargement des teams...",
+    "errorPrefix": "Erreur : ",
+    "offlineMode": "Mode offline : les saisies sont enregistrées localement.",
+    "notLoggedIn": "Non connecté : les saisies sont enregistrées localement.",
+    "postToChannel": "Publier dans le canal",
+    "posting": "Publication en cours...",
+    "postSuccess": "Publication réussie dans le canal !",
+    "postError": "Erreur lors de la publication : ",
+    "unknownError": "Erreur inconnue",
+    "mentionLabel": "Mentionner des personnes (@)",
+    "mentionPlaceholder": "Saisir un nom...",
+    "imagesSavedAndUploaded": "{{count}} image(s) enregistrée(s) et téléchargée(s) !",
+    "imagesSavedOffline": "{{count}} image(s) enregistrée(s) offfline !",
+    "cachedPostsSynced": "{{count}} publication(s) en cache a/ont été téléchargée(s) automatiquement !",
+    "fetchTeamsError": "Erreur lors du chargement des teams",
+    "fetchTeamsFailure": "Impossible de charger les teams"
+  },
+  "channels": {
+    "selectChannel": "Sélectionner un canal",
+    "loadingChannels": "Chargement des canaux...",
+    "fetchChannelsError": "Erreur lors du chargement des canaux",
+    "fetchChannelsFailure": "Impossible de charger les canaux"
+  },
+  "upload": {
+    "title": "Télécharger des images dans le dossier \"Bilder\"",
+    "subfolderLabel": "Sélectionner un sous-dossier (Optionnel)",
+    "noSubfolder": "Pas de sous-dossier (Directement dans \"Bilder\")",
+    "noSubfoldersFound": "Aucun sous-dossier trouvé.",
+    "noSubfoldersCached": "Aucun sous-dossier en cache disponible.",
+    "filesSelected": "{{count}} fichier(s) sélectionné(s)",
+    "selectFiles": "Sélectionner des fichiers",
+    "removeAll": "Tout supprimer",
+    "remove": "Supprimer",
+    "messageLabel": "Ajouter un message à la publication",
+    "uploading": "Téléchargement ({{current}}/{{total}})...",
+    "uploadButton": "Télécharger la publication",
+    "saveOffline": "Enregistrer offline",
+    "uploadSuccess": "{{count}} image(s) téléchargée(s) avec succès !",
+    "uploadFailed": "Échec du téléchargement",
+    "savedOffline": "{{count}} image(s) enregistrée(s) offline !",
+    "uploadingImage": "Téléchargement de l'image {{current}} sur {{total}}"
+  },
+  "welcome": {
+    "greeting": "Bienvenue {{name}}"
+  },
+  "profile": {
+    "name": "Nom",
+    "title": "Titre",
+    "mail": "E-mail",
+    "phone": "Téléphone",
+    "location": "Lieu"
+  },
+  "error": {
+    "occurred": "Une erreur s'est produite : ",
+    "unknown": "Erreur inconnue"
+  },
+  "postMessage": {
+    "viewOriginal": "Voir l'original ↗",
+    "newImagesUploaded": "Nouvelles images téléchargées : "
+  }
+}

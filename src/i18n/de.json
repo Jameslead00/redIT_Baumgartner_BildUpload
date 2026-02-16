@@ -1,0 +1,80 @@
+{
+  "app": {
+    "title": "Bild Upload",
+    "description": "Lade Bilder und Beiträge in Microsoft Teams Kanäle hoch."
+  },
+  "navbar": {
+    "appTitle": "Baumgartner Fenster",
+    "online": "Online",
+    "offline": "Offline"
+  },
+  "auth": {
+    "login": "Anmelden",
+    "authInProgress": "Authentifizierung läuft..."
+  },
+  "teams": {
+    "selectTeam": "Team auswählen",
+    "onlineStatus": "Online",
+    "offlineCached": "Offline gecacht",
+    "searchTeams": "Teams suchen",
+    "loadingTeams": "Teams werden geladen...",
+    "errorPrefix": "Fehler: ",
+    "offlineMode": "Offline-Modus: Eingaben werden lokal gespeichert.",
+    "notLoggedIn": "Nicht eingeloggt: Eingaben werden lokal gespeichert.",
+    "postToChannel": "Beitrag in Kanal posten",
+    "posting": "Wird gepostet...",
+    "postSuccess": "Beitrag erfolgreich in den Kanal gepostet!",
+    "postError": "Fehler beim Posten: ",
+    "unknownError": "Unbekannter Fehler",
+    "mentionLabel": "Personen erwähnen (@)",
+    "mentionPlaceholder": "Namen eingeben...",
+    "imagesSavedAndUploaded": "{{count}} Bild(er) gespeichert und hochgeladen!",
+    "imagesSavedOffline": "{{count}} Bild(er) offline gespeichert!",
+    "cachedPostsSynced": "{{count}} gecachte(r) Beitrag/Beiträge wurde(n) automatisch hochgeladen!",
+    "fetchTeamsError": "Fehler beim Laden der Teams",
+    "fetchTeamsFailure": "Teams konnten nicht geladen werden"
+  },
+  "channels": {
+    "selectChannel": "Kanal auswählen",
+    "loadingChannels": "Kanäle werden geladen...",
+    "fetchChannelsError": "Fehler beim Laden der Kanäle",
+    "fetchChannelsFailure": "Kanäle konnten nicht geladen werden"
+  },
+  "upload": {
+    "title": "Bilder hochladen in Ordner \"Bilder\"",
+    "subfolderLabel": "Unterordner auswählen (Optional)",
+    "noSubfolder": "Kein Unterordner (Direkt in \"Bilder\")",
+    "noSubfoldersFound": "Keine Unterordner gefunden.",
+    "noSubfoldersCached": "Keine gecachten Unterordner verfügbar.",
+    "filesSelected": "{{count}} Datei(en) ausgewählt",
+    "selectFiles": "Dateien auswählen",
+    "removeAll": "Alle entfernen",
+    "remove": "Entfernen",
+    "messageLabel": "Nachricht zum Beitrag hinzufügen",
+    "uploading": "Hochladen ({{current}}/{{total}})...",
+    "uploadButton": "Beitrag hochladen",
+    "saveOffline": "Offline speichern",
+    "uploadSuccess": "{{count}} Bild(er) erfolgreich hochgeladen!",
+    "uploadFailed": "Upload fehlgeschlagen",
+    "savedOffline": "{{count}} Bild(er) offline gespeichert!",
+    "uploadingImage": "Bild {{current}} von {{total}} wird hochgeladen"
+  },
+  "welcome": {
+    "greeting": "Willkommen {{name}}"
+  },
+  "profile": {
+    "name": "Name",
+    "title": "Titel",
+    "mail": "E-Mail",
+    "phone": "Telefon",
+    "location": "Standort"
+  },
+  "error": {
+    "occurred": "Ein Fehler ist aufgetreten: ",
+    "unknown": "Unbekannter Fehler"
+  },
+  "postMessage": {
+    "viewOriginal": "Original anzeigen ↗",
+    "newImagesUploaded": "Neue Bilder hochgeladen: "
+  }
+}

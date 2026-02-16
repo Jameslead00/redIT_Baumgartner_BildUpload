@@ -9,8 +9,10 @@ import { postMessageToChannel, MentionUser } from "./PostMessage"; // MentionUse
 import { Autocomplete, TextField, Button, Typography, Box, Alert, IconButton, Snackbar } from "@mui/material";
 import { Star, StarBorder } from "@mui/icons-material";
 import { checkFolderExists, createFolder, uploadLargeFile, uploadSmallFile, encodeFilesToBase64, getFolderPath } from './ImageUpload';
+import { useTranslation } from "react-i18next";
 
 const TeamsList: React.FC = () => {
+    const { t } = useTranslation();
     const { instance, accounts } = useMsal();
     const account = useAccount(accounts[0] || {});
     const [teams, setTeams] = useState<Team[]>([]);
@@ -138,7 +140,7 @@ const TeamsList: React.FC = () => {
                         await db.allJoinedTeams.delete(id);
                     }
                 } else {
-                    setError("Failed to fetch teams");
+                    setError(t('teams.fetchTeamsFailure'));
                 }
             } catch (err) {
                 if (err instanceof InteractionRequiredAuthError) {
@@ -149,7 +151,7 @@ const TeamsList: React.FC = () => {
                         }).then((res) => res.json()).then((data) => setTeams(data.value));
                     });
                 } else {
-                    setError("Error fetching teams");
+                    setError(t('teams.fetchTeamsError'));
                 }
             } finally {
                 setLoading(false);
@@ -689,7 +691,7 @@ const TeamsList: React.FC = () => {
             await syncPost(newPost, onProgress);
         }
         // Feedback via Snackbar anstatt alert
-        setSnackbarMessage(`${files?.length || 0} image(s) saved ${uploaded ? 'and uploaded' : 'offline'}!`);
+        setSnackbarMessage(t(uploaded ? 'teams.imagesSavedAndUploaded' : 'teams.imagesSavedOffline', { count: files?.length || 0 }));
         setSnackbarOpen(true);
         // Reset alles
         setCustomText('');
@@ -775,7 +777,7 @@ const TeamsList: React.FC = () => {
         setOfflinePosts([]);
         setPosting(false);
         // Feedback via Snackbar anstatt alert
-        setSnackbarMessage(`${offlinePosts.length} cached Post(s) wurden automatisch hochgeladen!`);
+        setSnackbarMessage(t('teams.cachedPostsSynced', { count: offlinePosts.length }));
         setSnackbarOpen(true);
     };
 
@@ -794,7 +796,7 @@ const TeamsList: React.FC = () => {
             // Hier uploadedFiles und selectedMentions übergeben
             await postMessageToChannel(accessToken, selectedTeam.id, selectedChannel!.id, customText, imageUrls, uploadedFiles, selectedMentions);
 
-            setSnackbarMessage("Beitrag erfolgreich in den Kanal gepostet!");
+            setSnackbarMessage(t('teams.postSuccess'));
             setSnackbarOpen(true);
             setUploadSuccess(false);
             setCustomText("");
@@ -802,7 +804,7 @@ const TeamsList: React.FC = () => {
             setUploadedFiles([]);
             setSelectedMentions([]); // Reset Mentions
         } catch (err) {
-            setSnackbarMessage("Fehler beim Posten: " + (err instanceof Error ? err.message : "Unbekannter Fehler"));
+            setSnackbarMessage(t('teams.postError') + (err instanceof Error ? err.message : t('teams.unknownError')));
             setSnackbarOpen(true);
         } finally {
             setPosting(false);
@@ -811,20 +813,20 @@ const TeamsList: React.FC = () => {
 
    
 
-    if (loading && account && isOnline) return <Typography variant="h6">Loading teams...</Typography>;  // Nur laden, wenn account und online
-    if (error) return <Alert severity="error">Error: {error}</Alert>;
+    if (loading && account && isOnline) return <Typography variant="h6">{t('teams.loadingTeams')}</Typography>;  // Nur laden, wenn account und online
+    if (error) return <Alert severity="error">{t('teams.errorPrefix')}{error}</Alert>;
 
     return (
         <Box sx={{ mt: 3 }}>
             {/* Offline-Hinweis */}
             {(!isOnline || !account) && (
                 <Alert severity="warning" sx={{ mb: 2 }}>
-                    {!isOnline ? 'Offline-Modus: Eingaben werden lokal gespeichert.' : 'Nicht eingeloggt: Eingaben werden lokal gespeichert.'}
+                    {!isOnline ? t('teams.offlineMode') : t('teams.notLoggedIn')}
                 </Alert>
             )}
 
             <Typography variant="h5" gutterBottom>
-                Team auswählen ({isOnline && account ? 'Online' : 'Offline gecacht'})
+                {t('teams.selectTeam')} ({isOnline && account ? t('teams.onlineStatus') : t('teams.offlineCached')})
             </Typography>
             <Autocomplete
                 options={availableTeams}  // Zeigt gecachte Teams, wenn nicht eingeloggt
@@ -839,7 +841,7 @@ const TeamsList: React.FC = () => {
                         {option.displayName}
                     </Box>
                 )}
-                renderInput={(params) => <TextField {...params} label="Search teams" variant="outlined" />}
+                renderInput={(params) => <TextField {...params} label={t('teams.searchTeams')} variant="outlined" />}
                 sx={{ mb: 2 }}
             />
             {selectedTeam && (
@@ -877,8 +879,8 @@ const TeamsList: React.FC = () => {
                             renderInput={(params) => (
                                 <TextField 
                                     {...params} 
-                                    label="Personen erwähnen (@)" 
-                                    placeholder="Namen eingeben..." 
+                                    label={t('teams.mentionLabel')} 
+                                    placeholder={t('teams.mentionPlaceholder')} 
                                     variant="outlined"
                                 />
                             )}
@@ -896,7 +898,7 @@ const TeamsList: React.FC = () => {
                     disabled={posting}
                     sx={{ mt: 2 }}
                 >
-                    {posting ? "Posting..." : "Beitrag in Kanal posten"}
+                    {posting ? t('teams.posting') : t('teams.postToChannel')}
                 </Button>
             )}
             {/* Snackbar für Feedback */}

@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { useMsal, useAccount } from "@azure/msal-react";
 import Typography from "@mui/material/Typography";
+import { useTranslation } from "react-i18next";
 
 const WelcomeName = () => {
+    const { t } = useTranslation();
     const { accounts } = useMsal();
     const account = useAccount(accounts[0] || {});
     const [name, setName] = useState("");
@@ -16,7 +18,7 @@ const WelcomeName = () => {
     }, [account]);
 
     if (name) {
-        return <Typography variant="h6">Willkommen {name}</Typography>;
+        return <Typography variant="h6">{t('welcome.greeting', { name })}</Typography>;
     } else {
         return null;
     }
