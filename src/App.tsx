@@ -2,6 +2,7 @@ import { Routes, Route, useNavigate } from "react-router-dom";
 // Material-UI imports
 import { Container, Paper, Typography, Box } from "@mui/material";
 import { useTranslation } from "react-i18next";
+import StatsPage from "./pages/StatsPage";
 
 // MSAL imports
 import { MsalProvider } from "@azure/msal-react";
@@ -27,19 +28,24 @@ function App({ pca }: AppProps) {
     return (
         <MsalProvider instance={pca}>
             <PageLayout>
-                <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
-                    <Paper elevation={3} sx={{ p: 3, borderRadius: 2 }}>
-                        <Box sx={{ textAlign: 'center', mb: 3 }}>
-                            <Typography variant="h4" component="h1" gutterBottom>
-                                {t('app.title')}
-                            </Typography>
-                            <Typography variant="body1" color="text.secondary">
-                                {t('app.description')}
-                            </Typography>
-                        </Box>
-                        <TeamsList />
-                    </Paper>
-                </Container>
+                <Routes>
+                    <Route path="/stats" element={<StatsPage />} />
+                    <Route path="*" element={
+                        <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
+                            <Paper elevation={3} sx={{ p: 3, borderRadius: 2 }}>
+                                <Box sx={{ textAlign: 'center', mb: 3 }}>
+                                    <Typography variant="h4" component="h1" gutterBottom>
+                                        {t('app.title')}
+                                    </Typography>
+                                    <Typography variant="body1" color="text.secondary">
+                                        {t('app.description')}
+                                    </Typography>
+                                </Box>
+                                <TeamsList />
+                            </Paper>
+                        </Container>
+                    } />
+                </Routes>
             </PageLayout>
         </MsalProvider>
     );
