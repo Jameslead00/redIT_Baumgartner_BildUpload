@@ -8,6 +8,8 @@ import {
     BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
     XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
+import { useMsal, useIsAuthenticated } from "@azure/msal-react";
+import { loginRequest } from "../authConfig";
 import { LOG_SITE_ID, LOG_LIST_ID } from "../utils/Logger";
 
 // ─── Typen ────────────────────────────────────────────────────────────────────
@@ -44,14 +46,6 @@ interface StatusData {
     name: string;
     value: number;
     percent: string;
-}
-
-// ─── Globales AccessToken (ohne Auth-Implementierung) ─────────────────────────
-
-declare global {
-    interface Window {
-        __ACCESS_TOKEN__?: string;
-    }
 }
 
 // ─── Farben für PieChart ──────────────────────────────────────────────────────
@@ -114,15 +108,14 @@ function toMonthKey(d: Date): string {
 // ─── Hauptkomponente ──────────────────────────────────────────────────────────
 
 const StatsPage: React.FC = () => {
+    const { instance, accounts } = useMsal();
+    const isAuthenticated = useIsAuthenticated();
     const [entries, setEntries] = useState<ParsedLogEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    // AccessToken aus globalem Window-Objekt lesen
-    const accessToken = window.__ACCESS_TOKEN__;
-
     useEffect(() => {
-        if (!accessToken) {
+        if (!isAuthenticated || accounts.length === 0) {
             setLoading(false);
             return undefined;
         }
@@ -131,6 +124,14 @@ const StatsPage: React.FC = () => {
 
         (async () => {
             try {
+                // Token automatisch via MSAL holen (gleicher Mechanismus wie restliche App)
+                const account = accounts[0];
+                const response = await instance.acquireTokenSilent({
+                    ...loginRequest,
+                    account
+                });
+                const accessToken = response.accessToken;
+
                 const raw = await fetchAllLogItems(accessToken);
                 if (cancelled) return;
 
@@ -156,7 +157,7 @@ const StatsPage: React.FC = () => {
         })();
 
         return () => { cancelled = true; };
-    }, [accessToken]);
+    }, [isAuthenticated, accounts, instance]);
 
     // ── Aggregationen ─────────────────────────────────────────────────────────
 
@@ -204,12 +205,11 @@ const StatsPage: React.FC = () => {
 
     // ── Render ────────────────────────────────────────────────────────────────
 
-    if (!accessToken) {
+    if (!isAuthenticated) {
         return (
             <Container maxWidth="md" sx={{ mt: 4 }}>
                 <Alert severity="warning">
-                    Kein AccessToken vorhanden. Bitte setze <code>window.__ACCESS_TOKEN__</code> mit einem gültigen
-                    Microsoft Graph Token, bevor du diese Seite öffnest.
+                    Bitte melde dich zuerst an, um die Statistiken zu sehen.
                 </Alert>
             </Container>
         );
