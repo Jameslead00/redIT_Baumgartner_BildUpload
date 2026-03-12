@@ -11,7 +11,7 @@ describe('UploadProgress component', () => {
 
   test('renders progress bar and text when uploading is true', () => {
     render(<UploadProgress uploading={true} progress={50} currentFile={2} totalFiles={5} />);
-    expect(screen.getByText(/Bild 2 von 5 wird hochgeladen/i)).toBeInTheDocument();
+    expect(screen.getByText(/Datei 2 von 5 wird hochgeladen/i)).toBeInTheDocument();
     // the progress bar has role progressbar
     expect(screen.getByRole('progressbar')).toBeInTheDocument();
   });

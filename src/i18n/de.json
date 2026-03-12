@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "Bild Upload",
-    "description": "Lade Bilder und Beiträge in Microsoft Teams Kanäle hoch."
+    "title": "Datei Upload",
+    "description": "Lade Bilder, PDFs und Beiträge in Microsoft Teams Kanäle hoch."
   },
   "navbar": {
     "appTitle": "Baumgartner Fenster",
@@ -28,8 +28,8 @@
     "unknownError": "Unbekannter Fehler",
     "mentionLabel": "Personen erwähnen (@)",
     "mentionPlaceholder": "Namen eingeben...",
-    "imagesSavedAndUploaded": "{{count}} Bild(er) gespeichert und hochgeladen!",
-    "imagesSavedOffline": "{{count}} Bild(er) offline gespeichert!",
+    "imagesSavedAndUploaded": "{{count}} Datei(en) gespeichert und hochgeladen!",
+    "imagesSavedOffline": "{{count}} Datei(en) offline gespeichert!",
     "cachedPostsSynced": "{{count}} gecachte(r) Beitrag/Beiträge wurde(n) automatisch hochgeladen!",
     "fetchTeamsError": "Fehler beim Laden der Teams",
     "fetchTeamsFailure": "Teams konnten nicht geladen werden"
@@ -41,7 +41,7 @@
     "fetchChannelsFailure": "Kanäle konnten nicht geladen werden"
   },
   "upload": {
-    "title": "Bilder hochladen in Ordner \"Bilder\"",
+    "title": "Bilder und PDFs in Ordner \"Bilder\" hochladen",
     "subfolderLabel": "Unterordner auswählen (Optional)",
     "noSubfolder": "Kein Unterordner (Direkt in \"Bilder\")",
     "noSubfoldersFound": "Keine Unterordner gefunden.",
@@ -54,10 +54,10 @@
     "uploading": "Hochladen ({{current}}/{{total}})...",
     "uploadButton": "Beitrag hochladen",
     "saveOffline": "Offline speichern",
-    "uploadSuccess": "{{count}} Bild(er) erfolgreich hochgeladen!",
+    "uploadSuccess": "{{count}} Datei(en) erfolgreich hochgeladen!",
     "uploadFailed": "Upload fehlgeschlagen",
-    "savedOffline": "{{count}} Bild(er) offline gespeichert!",
-    "uploadingImage": "Bild {{current}} von {{total}} wird hochgeladen"
+    "savedOffline": "{{count}} Datei(en) offline gespeichert!",
+    "uploadingImage": "Datei {{current}} von {{total}} wird hochgeladen"
   },
   "welcome": {
     "greeting": "Willkommen {{name}}"
@@ -75,6 +75,7 @@
   },
   "postMessage": {
     "viewOriginal": "Original anzeigen ↗",
-    "newImagesUploaded": "Neue Bilder hochgeladen: "
+    "viewFile": "Datei öffnen ↗",
+    "newFilesUploaded": "Neue Dateien hochgeladen: "
   }
 }

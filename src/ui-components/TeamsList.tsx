@@ -242,7 +242,8 @@ const TeamsList: React.FC = () => {
                                         
                                         if (childrenResponse.ok) {
                                             const data = await childrenResponse.json();
-                                            const subs = data.value.map((item: any) => ({ id: item.id, name: item.name }));
+                                            const items = Array.isArray(data.value) ? data.value : [];
+                                            const subs = items.map((item: any) => ({ id: item.id, name: item.name }));
                                             channelSubFolders[channel.id] = subs;
                                             needsUpdate = true;
                                         } else if (childrenResponse.status === 404) {
@@ -363,7 +364,8 @@ const TeamsList: React.FC = () => {
                                     
                                     if (childrenResponse.ok) {
                                         const data = await childrenResponse.json();
-                                        const subs = data.value.map((item: any) => ({ id: item.id, name: item.name }));
+                                        const items = Array.isArray(data.value) ? data.value : [];
+                                        const subs = items.map((item: any) => ({ id: item.id, name: item.name }));
                                         channelSubFolders[channel.id] = subs;
                                         needsUpdate = true;
                                     } else if (childrenResponse.status === 404) {
