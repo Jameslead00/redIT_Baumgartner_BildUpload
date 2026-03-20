@@ -2,6 +2,7 @@
     "name": "typescript-sample",
     "version": "0.1.0",
     "private": true,
+    "homepage": "https://jameslead00.github.io/redIT_Baumgartner_BildUpload",
     "dependencies": {
         "@azure/msal-browser": "^4.0.0",
         "@azure/msal-react": "^3.0.0",
@@ -19,6 +20,7 @@
         "react-dom": "^19.2.1",
         "react-i18next": "^16.5.4",
         "react-router-dom": "^6.7.0",
+        "recharts": "^3.7.0",
         "typescript": "^4.9.4"
     },
     "scripts": {

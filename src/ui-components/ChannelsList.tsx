@@ -25,7 +25,7 @@ interface ChannelsListProps {
     customText: string;
     isFavorite: boolean;
     cachedChannels?: Channel[];  // Neue Prop für gecachte Kanäle
-    onSaveOffline?: (files: File[]) => void;  // Füge onSaveOffline Prop hinzu
+    onSaveOffline?: (files: File[], subFolder: string, onProgress?: (current: number, total: number) => void) => Promise<void> | void;
     cachedSubFolders?: { [channelId: string]: SubFolder[] }; // New Prop
     cachedAllChannels?: Channel[]; // Neue Prop für alle gecachten Kanäle
     cachedAllSubFolders?: { [channelId: string]: SubFolder[] }; // Neue Prop für alle gecachten Subfolders

@@ -216,6 +216,66 @@ describe('ImageUpload component (unit)', () => {
     await waitFor(() => expect(onSaveOffline).toHaveBeenCalled());
   });
 
+  test('pdf upload shows placeholder preview and passes pdf file to onUploadSuccess', async () => {
+    msalStub.accounts = [{}];
+    msalStub.instance.acquireTokenSilent = jest.fn().mockResolvedValue({ accessToken: 'mock' });
+    (UploadModule.encodeFilesToBase64 as jest.Mock).mockResolvedValue([]);
+
+    const onUploadSuccess = jest.fn();
+    const team = { id: 't1', displayName: 'Team A' };
+    const channel = { id: 'c1', displayName: 'General' };
+
+    (global as any).fetch = jest.fn().mockImplementation((input: RequestInfo, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : (input as any).url;
+      const method = init?.method || 'GET';
+
+      if (url.includes('/groups/') && url.includes('/sites/root')) {
+        return Promise.resolve({ ok: true, json: async (): Promise<{ id: string }> => ({ id: 'siteId' }) });
+      }
+      if (method === 'GET' && url.includes('/drive/root:/General/Bilder') && !url.includes('manual.pdf')) {
+        return Promise.resolve({ ok: true, json: async (): Promise<{}> => ({}) });
+      }
+      if (method === 'PUT' && url.includes('/content')) {
+        return Promise.resolve({ ok: true });
+      }
+      if (method === 'GET' && url.includes('manual.pdf')) {
+        return Promise.resolve({ ok: true, json: async (): Promise<{ webUrl: string }> => ({ webUrl: 'https://weburl.pdf' }) });
+      }
+
+      return Promise.resolve({ ok: true, json: async (): Promise<{ value: any[] }> => ({ value: [] }) });
+    });
+
+    render(
+      <ImageUpload
+        team={team}
+        channel={channel}
+        customText=""
+        onUploadSuccess={onUploadSuccess}
+        onCustomTextChange={() => {}}
+        cachedSubFolders={[]}
+      />
+    );
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(['pdf'], 'manual.pdf', { type: 'application/pdf' });
+    await userEvent.upload(input, file);
+
+    await waitFor(() => expect(screen.getByText(/manual.pdf/i)).toBeInTheDocument());
+    expect(screen.getByText('PDF')).toBeInTheDocument();
+    expect(UploadModule.resizeImage).not.toHaveBeenCalled();
+
+    const uploadBtn = screen.getByRole('button', { name: /Beitrag hochladen/i });
+    await userEvent.click(uploadBtn);
+
+    await waitFor(() => {
+      expect(onUploadSuccess).toHaveBeenCalledWith(
+        ['https://weburl.pdf'],
+        [expect.objectContaining({ name: 'manual.pdf', type: 'application/pdf' })],
+        []
+      );
+    });
+  });
+
   test('uploadImages creates folder when missing and calls uploadSmallFile', async () => {
     // Provide account via msal stub
     msalStub.accounts = [{}];

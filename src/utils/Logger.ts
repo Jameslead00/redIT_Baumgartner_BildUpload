@@ -9,8 +9,8 @@ export interface LogEntry {
 }
 
 // Konfiguration
-const LOG_SITE_ID = "baumgartnerfensterag.sharepoint.com,35792666-559f-437e-9570-c2b56718a6f7,5936e718-30c3-4cec-a27e-3fe2e1cf9514"; 
-const LOG_LIST_ID = "46579bc0-c762-4652-bcd8-e7c67eae8799";
+export const LOG_SITE_ID = "baumgartnerfensterag.sharepoint.com,35792666-559f-437e-9570-c2b56718a6f7,5936e718-30c3-4cec-a27e-3fe2e1cf9514"; 
+export const LOG_LIST_ID = "46579bc0-c762-4652-bcd8-e7c67eae8799";
 
 export const logToSharePoint = async (accessToken: string, entry: LogEntry) => {
     // Lokale Zeit berechnen (Browser-Zeit)

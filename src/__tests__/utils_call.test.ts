@@ -68,7 +68,7 @@ describe('PostMessage posting', () => {
     await postMessageToChannel('token', 't', 'c', '', [], [], []);
     expect((global as any).fetch).toHaveBeenCalled();
     const body = JSON.parse((global as any).fetch.mock.calls[0][1].body);
-    expect(body.body.content).toContain('Neue Bilder hochgeladen');
+    expect(body.body.content).toContain('Neue Dateien hochgeladen');
   });
 
   test('postMessageToChannel handles files to hostedContents', async () => {

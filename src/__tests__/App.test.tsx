@@ -42,8 +42,8 @@ describe("App component", () => {
     );
 
     // Basic layout assertions
-    expect(screen.getByText(/Bild Upload/i)).toBeInTheDocument();
-    expect(screen.getByText(/Lade Bilder und Beiträge/i)).toBeInTheDocument();
+    expect(screen.getByText(/Datei Upload/i)).toBeInTheDocument();
+    expect(screen.getByText(/Lade Bilder, PDFs und Beiträge/i)).toBeInTheDocument();
 
     // Make sure PageLayout & TeamsList placeholders are present
     expect(screen.getByTestId("mock-pagelayout")).toBeInTheDocument();

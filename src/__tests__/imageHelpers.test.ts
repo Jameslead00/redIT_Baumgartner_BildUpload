@@ -110,4 +110,14 @@ describe('ImageUpload helper functions', () => {
     (global as any).FileReader = frOrig;
     (document.createElement as jest.Mock).mockRestore();
   });
+
+  test('encodeFilesToBase64 ignores non-image files', async () => {
+    const spy = jest.spyOn(require('../ui-components/ImageUpload'), 'resizeImage');
+    const files = [new File(['pdf'], 'doc.pdf', { type: 'application/pdf' })];
+
+    const result = await encodeFilesToBase64(files);
+
+    expect(result).toEqual([]);
+    expect(spy).not.toHaveBeenCalled();
+  });
 });

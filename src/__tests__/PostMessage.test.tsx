@@ -171,8 +171,7 @@ describe('postMessageToChannel', () => {
     const options = mockFetch.mock.calls[0][1];
     const body = JSON.parse(options.body);
     
-    // Prüfen auf den Default-Text "Neue Bilder hochgeladen: "
-    expect(body.body.content).toContain('Neue Bilder hochgeladen: ');
+    expect(body.body.content).toContain('Neue Dateien hochgeladen: ');
   });
 
   test('uses fallback link "#" when imageUrls are missing for files', async () => {
@@ -268,5 +267,41 @@ describe('postMessageToChannel', () => {
     // FIX: Erwartete Fehlermeldung anpassen
     await expect(postMessageToChannel('token', 't1', 'c1', 'Text', [], files, []))
         .rejects.toThrow('Canvas toBlob failed');
+  });
+
+  test('renders pdf files as links without hosted content', async () => {
+    const mockFetch = jest.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    (global as any).fetch = mockFetch;
+
+    const files = [new File(['pdf'], 'manual.pdf', { type: 'application/pdf' })];
+    await postMessageToChannel('token', 't1', 'c1', 'Text', ['https://drive/pdf'], files, []);
+
+    const options = mockFetch.mock.calls[0][1];
+    const body = JSON.parse(options.body);
+
+    expect(body.hostedContents).toEqual([]);
+    expect(body.body.content).toContain('manual.pdf');
+    expect(body.body.content).toContain('https://drive/pdf');
+    expect(body.body.content).toContain('Datei öffnen');
+  });
+
+  test('renders mixed image and pdf uploads correctly', async () => {
+    const mockFetch = jest.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    (global as any).fetch = mockFetch;
+
+    const files = [
+      new File(['img'], 'img1.jpg', { type: 'image/jpeg' }),
+      new File(['pdf'], 'manual.pdf', { type: 'application/pdf' })
+    ];
+
+    await postMessageToChannel('token', 't1', 'c1', 'Text', ['https://drive/img', 'https://drive/pdf'], files, []);
+
+    const options = mockFetch.mock.calls[0][1];
+    const body = JSON.parse(options.body);
+
+    expect(body.hostedContents).toHaveLength(1);
+    expect(body.body.content).toContain('src="../hostedContents/1/$value"');
+    expect(body.body.content).toContain('manual.pdf');
+    expect(body.body.content).toContain('https://drive/pdf');
   });
 });

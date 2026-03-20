@@ -39,6 +39,19 @@ interface FileData {
     data: string;
 }
 
+export const isImageFile = (file: File): boolean => file.type.startsWith('image/');
+
+export const isPdfFile = (file: File): boolean => file.type === 'application/pdf';
+
+export const isSupportedUploadFile = (file: File): boolean => isImageFile(file) || isPdfFile(file);
+
+const getFilePreviewLabel = (file: File): string => {
+    if (isPdfFile(file)) {
+        return 'PDF';
+    }
+    return file.name.charAt(0).toUpperCase();
+};
+
 // Hilfsfunktion: Base64 zu Blob
 const dataURLToBlob = (dataURL: string): Blob => {
     const arr = dataURL.split(',');
@@ -207,19 +220,31 @@ export const resizeImage = (file: File, maxWidth: number = 200, maxHeight: numbe
 
 // Neue Hilfsfunktion: Mehrere Dateien zu base64 encodieren
 export const encodeFilesToBase64 = async (files: File[]): Promise<string[]> => {
-    // Kein Limit mehr – alle Bilder erlauben
-    let base64Images = await Promise.all(files.map(file => resizeImage(file, 150, 150, 0.4)));  // Start mit 40% Qualität
+    const imageFiles = files.filter(isImageFile);
+    if (imageFiles.length === 0) {
+        return [];
+    }
+
+    let base64Images = await Promise.all(imageFiles.map(file => resizeImage(file, 150, 150, 0.4)));  // Start mit 40% Qualität
     let totalSize = base64Images.reduce((sum, img) => sum + (img.length * 0.75), 0);
 
     // Reduziere Qualität weiter, wenn über 24 KB
     let quality = 0.4;
     while (totalSize > 24000 && quality > 0.1) {
         quality -= 0.05;  // Kleinere Schritte für feinere Anpassung
-        base64Images = await Promise.all(files.map(file => resizeImage(file, 150, 150, quality)));
+        base64Images = await Promise.all(imageFiles.map(file => resizeImage(file, 150, 150, quality)));
         totalSize = base64Images.reduce((sum, img) => sum + (img.length * 0.75), 0);
     }
 
     return base64Images;
+};
+
+const generateFilePreview = async (file: File): Promise<string> => {
+    if (!isImageFile(file)) {
+        return '';
+    }
+
+    return resizeImage(file, 100, 100, 0.5);
 };
 
 const ImageUpload: React.FC<ImageUploadProps> = ({ 
@@ -297,7 +322,8 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
 
                 if (childrenResponse.ok) {
                     const data = await childrenResponse.json();
-                    setSubFolders(data.value.map((item: any) => ({ id: item.id, name: item.name })));
+                    const items = Array.isArray(data.value) ? data.value : [];
+                    setSubFolders(items.map((item: any) => ({ id: item.id, name: item.name })));
                 } else if (childrenResponse.status === 404) {
                     // "Bilder" folder doesn't exist yet, which is fine.
                     console.log("Bilder folder does not exist yet.");
@@ -316,15 +342,14 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files && event.target.files.length > 0) {
-            const newFiles = Array.from(event.target.files);
+            const newFiles = Array.from(event.target.files).filter(isSupportedUploadFile);
             setSelectedFiles(prev => [...prev, ...newFiles]);
             
-            // Erzeuge Thumbnails für Vorschau (klein und schnell)
             const generateThumbnails = async () => {
-                const newThumbnails = await Promise.all(newFiles.map(file => resizeImage(file, 100, 100, 0.5)));  // Kleine Thumbnails
+                const newThumbnails = await Promise.all(newFiles.map(file => generateFilePreview(file)));
                 setThumbnails(prev => [...prev, ...newThumbnails]);
             };
-            generateThumbnails();
+            void generateThumbnails();
             
             event.target.value = "";  // Reset input
         }
@@ -516,7 +541,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
 
             <input
                 type="file"
-                accept="image/*"
+                accept="image/*,application/pdf"
                 multiple
                 onChange={handleFileChange}
                 ref={fileInputRef}
@@ -548,13 +573,30 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
                             <Grid item xs={6} sm={4} md={3} key={index}>
                                 <Card>
                                     <Box sx={{ position: 'relative' }}>
-                                        <CardMedia
-                                            component="img"
-                                            height="100"  // Kleiner für Performance
-                                            image={thumbnails[index] || ''}  // Verwende thumbnail
-                                            alt={file.name}
-                                            sx={{ objectFit: 'cover' }}
-                                        />
+                                        {thumbnails[index] ? (
+                                            <CardMedia
+                                                component="img"
+                                                height="100"
+                                                image={thumbnails[index]}
+                                                alt={file.name}
+                                                sx={{ objectFit: 'cover' }}
+                                            />
+                                        ) : (
+                                            <Box
+                                                sx={{
+                                                    height: 100,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    backgroundColor: '#f4f4f4',
+                                                    color: '#d32f2f',
+                                                    fontWeight: 700,
+                                                    letterSpacing: '0.08em'
+                                                }}
+                                            >
+                                                {getFilePreviewLabel(file)}
+                                            </Box>
+                                        )}
                                         <IconButton
                                             size="small"
                                             color="error"

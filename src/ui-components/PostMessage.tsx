@@ -7,6 +7,8 @@ export interface MentionUser {
     displayName: string;
 }
 
+const isImageFile = (file: File): boolean => file.type.startsWith('image/');
+
 // Füge Interfaces für Adaptive Card-Elemente hinzu
 interface AdaptiveCardElement {
     type: string;
@@ -117,16 +119,33 @@ export const postMessageToChannel = async (
     files?: File[],
     mentions: MentionUser[] = [] 
 ): Promise<void> => {
-    
-    // 1. Hosted Contents vorbereiten (nur wenn files vorhanden)
-    const hostedContents = files && files.length > 0 ? await Promise.all(files.map(async (file, index) => {
-        const contentBytes = await prepareImageForHostedContent(file);
-        return {
-            "@microsoft.graph.temporaryId": (index + 1).toString(),
-            "contentBytes": contentBytes,
-            "contentType": "image/jpeg"
-        };
-    })) : [];
+    const fileEntries = files && files.length > 0
+        ? await Promise.all(files.map(async (file, index) => {
+            const oneDriveUrl = (imageUrls && imageUrls[index]) || "#";
+            if (!isImageFile(file)) {
+                return {
+                    file,
+                    oneDriveUrl,
+                    hostedContent: null,
+                };
+            }
+
+            const contentBytes = await prepareImageForHostedContent(file);
+            return {
+                file,
+                oneDriveUrl,
+                hostedContent: {
+                    "@microsoft.graph.temporaryId": (index + 1).toString(),
+                    "contentBytes": contentBytes,
+                    "contentType": file.type || "image/jpeg"
+                }
+            };
+        }))
+        : [];
+
+    const hostedContents = fileEntries
+        .filter((entry) => entry.hostedContent)
+        .map((entry) => entry.hostedContent);
 
     // 2. Mentions vorbereiten
     // WICHTIG: Filtere ungültige User ohne ID heraus, um Fehler zu vermeiden
@@ -149,17 +168,26 @@ export const postMessageToChannel = async (
     const mentionsHtml = validMentions.map((user, index) => `<at id="${index}">${escapeHtml(user.displayName)}</at>`).join(' ');
 
     // 3. HTML Body erstellen
-    const imagesHtml = hostedContents.length > 0 ? hostedContents.map((hc, index) => {
-        const id = hc["@microsoft.graph.temporaryId"];
-        const oneDriveUrl = (imageUrls && imageUrls[index]) || "#";
+    const filesHtml = fileEntries.length > 0 ? fileEntries.map((entry, index) => {
+        if (entry.hostedContent) {
+            const id = entry.hostedContent["@microsoft.graph.temporaryId"];
+            return `
+                <div style="margin-bottom: 16px;">
+                    <img src="../hostedContents/${id}/$value" style="max-width: 100%; width: auto; border-radius: 4px; display: block;" alt="Image ${index + 1}">
+                    <div style="margin-top: 4px;">
+                        <a href="${entry.oneDriveUrl}" target="_blank" style="font-size: 12px; color: #5b5fc7; text-decoration: none;">
+                            ${(i18n as any).t('postMessage.viewOriginal')}
+                        </a>
+                    </div>
+                </div>`;
+        }
+
         return `
-            <div style="margin-bottom: 16px;">
-                <img src="../hostedContents/${id}/$value" style="max-width: 100%; width: auto; border-radius: 4px; display: block;" alt="Image ${index + 1}">
-                <div style="margin-top: 4px;">
-                    <a href="${oneDriveUrl}" target="_blank" style="font-size: 12px; color: #5b5fc7; text-decoration: none;">
-                        ${(i18n as any).t('postMessage.viewOriginal')}
-                    </a>
-                </div>
+            <div style="margin-bottom: 16px; padding: 12px; border: 1px solid #d1d5db; border-radius: 4px;">
+                <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">${escapeHtml(entry.file.name)}</div>
+                <a href="${entry.oneDriveUrl}" target="_blank" style="font-size: 12px; color: #5b5fc7; text-decoration: none;">
+                    ${(i18n as any).t('postMessage.viewFile')}
+                </a>
             </div>`;
     }).join('') : '';
 
@@ -167,7 +195,7 @@ export const postMessageToChannel = async (
     // Wir nutzen <p> für den Text-Block
     const textContent = mentionsHtml 
         ? `<p>${mentionsHtml} ${escapeHtml(customText || "")}</p>` 
-        : `<p style="font-size: 14px; font-weight: bold; margin-bottom: 12px;">${escapeHtml(customText || (i18n as any).t('postMessage.newImagesUploaded'))}</p>`;
+        : `<p style="font-size: 14px; font-weight: bold; margin-bottom: 12px;">${escapeHtml(customText || (i18n as any).t('postMessage.newFilesUploaded'))}</p>`;
 
     const messagePayload = {
         body: {
@@ -176,7 +204,7 @@ export const postMessageToChannel = async (
                 <div>
                     ${textContent}
                     <div style="display: flex; flex-direction: column; gap: 10px;">
-                        ${imagesHtml}
+                        ${filesHtml}
                     </div>
                 </div>
             `

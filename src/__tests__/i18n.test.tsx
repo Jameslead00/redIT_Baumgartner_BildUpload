@@ -69,9 +69,9 @@ describe("i18n configuration", () => {
 
 describe("Language switching", () => {
   test("switching to French changes translations", async () => {
-    expect(i18n.t("app.title")).toBe("Bild Upload");
+    expect(i18n.t("app.title")).toBe("Datei Upload");
     await i18n.changeLanguage("fr");
-    expect(i18n.t("app.title")).toBe("Téléchargement d'images");
+    expect(i18n.t("app.title")).toBe("Téléchargement de fichiers");
   });
 
   test("switching back to German restores translations", async () => {
@@ -161,7 +161,7 @@ describe("Key translations spot-check", () => {
     ["auth.authInProgress", "Authentifizierung läuft...", "Authentification en cours..."],
     ["teams.selectTeam", "Team auswählen", "Sélectionner une team"],
     ["channels.selectChannel", "Kanal auswählen", "Sélectionner un canal"],
-    ["upload.title", "Bilder hochladen in Ordner \"Bilder\"", "Télécharger des images dans le dossier \"Bilder\""],
+    ["upload.title", "Bilder und PDFs in Ordner \"Bilder\" hochladen", "Télécharger des images et des PDF dans le dossier \"Bilder\""],
     ["error.occurred", "Ein Fehler ist aufgetreten: ", "Une erreur s'est produite : "],
     ["error.unknown", "Unbekannter Fehler", "Erreur inconnue"],
   ];
