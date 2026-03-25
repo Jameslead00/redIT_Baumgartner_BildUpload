@@ -2,7 +2,6 @@
     "name": "typescript-sample",
     "version": "0.1.0",
     "private": true,
-    "homepage": "https://jameslead00.github.io/redIT_Baumgartner_BildUpload",
     "dependencies": {
         "@azure/msal-browser": "^4.0.0",
         "@azure/msal-react": "^3.0.0",
