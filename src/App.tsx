@@ -2,7 +2,6 @@ import { Routes, Route, useNavigate } from "react-router-dom";
 // Material-UI imports
 import { Container, Paper, Typography, Box } from "@mui/material";
 import { useTranslation } from "react-i18next";
-import StatsPage from "./pages/StatsPage";
 
 // MSAL imports
 import { MsalProvider } from "@azure/msal-react";
@@ -29,7 +28,6 @@ function App({ pca }: AppProps) {
         <MsalProvider instance={pca}>
             <PageLayout>
                 <Routes>
-                    <Route path="/stats" element={<StatsPage />} />
                     <Route path="*" element={
                         <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
                             <Paper elevation={3} sx={{ p: 3, borderRadius: 2 }}>
