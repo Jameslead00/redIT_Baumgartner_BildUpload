@@ -1,6 +1,6 @@
 import { postMessageToChannel } from '../ui-components/PostMessage';
 
-const MAX_MESSAGE_PAYLOAD_BYTES = 3 * 1024 * 1024;
+const MAX_MESSAGE_PAYLOAD_BYTES = 3.5 * 1024 * 1024;
 
 describe('postMessageToChannel', () => {
   let originalImage: any;

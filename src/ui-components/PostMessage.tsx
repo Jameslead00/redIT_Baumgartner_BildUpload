@@ -3,7 +3,7 @@ import i18n from '../i18n/i18n';
 
 // Teams/Graph message payloads with hostedContents fail well below unlimited sizes.
 // Keep a conservative safety margin, but large enough that normal image previews still render.
-const MAX_MESSAGE_PAYLOAD_BYTES = 3 * 1024 * 1024;
+const MAX_MESSAGE_PAYLOAD_BYTES = 3.5 * 1024 * 1024;
 
 // Interface für Benutzer-Erwähnungen
 export interface MentionUser {
@@ -105,7 +105,7 @@ const prepareImageForHostedContent = (file: File): Promise<string> => {
                 } else {
                     reject(new Error('Canvas toBlob failed'));
                 }
-            }, 'image/jpeg', 0.8); // Gute Qualität für Anzeige
+            }, 'image/jpeg', 0.6); // Gute Qualität für Anzeige
         };
         img.onerror = reject;
         img.src = URL.createObjectURL(file);
