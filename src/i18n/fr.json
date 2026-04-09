@@ -76,6 +76,7 @@
   "postMessage": {
     "viewOriginal": "Voir l'original ↗",
     "viewFile": "Ouvrir le fichier ↗",
-    "newFilesUploaded": "Nouveaux fichiers téléchargés : "
+    "newFilesUploaded": "Nouveaux fichiers téléchargés : ",
+    "inlineImageLimitNotice": "{{count}} images supplémentaires se trouvent dans cette publication, mais ne sont pas affichées en raison de limitations côté serveur. Consultez-les directement dans le dossier."
   }
 }

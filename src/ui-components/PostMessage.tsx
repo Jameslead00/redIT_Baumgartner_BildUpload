@@ -1,6 +1,8 @@
 import React from 'react';
 import i18n from '../i18n/i18n';
 
+const MAX_MESSAGE_PAYLOAD_BYTES = 100 * 1024;
+
 // Interface für Benutzer-Erwähnungen
 export interface MentionUser {
     id: string;
@@ -8,6 +10,18 @@ export interface MentionUser {
 }
 
 const isImageFile = (file: File): boolean => file.type.startsWith('image/');
+
+interface HostedContent {
+    "@microsoft.graph.temporaryId": string;
+    contentBytes: string;
+    contentType: string;
+}
+
+interface FileEntry {
+    file: File;
+    oneDriveUrl: string;
+    hostedContent: HostedContent | null;
+}
 
 // Füge Interfaces für Adaptive Card-Elemente hinzu
 interface AdaptiveCardElement {
@@ -110,64 +124,23 @@ const escapeHtml = (str: string) => {
     });
 };
 
-export const postMessageToChannel = async (
-    accessToken: string,
-    teamId: string,
-    channelId: string,
+const buildMessagePayload = (
     customText: string,
-    imageUrls?: string[],
-    files?: File[],
-    mentions: MentionUser[] = [] 
-): Promise<void> => {
-    const fileEntries = files && files.length > 0
-        ? await Promise.all(files.map(async (file, index) => {
-            const oneDriveUrl = (imageUrls && imageUrls[index]) || "#";
-            if (!isImageFile(file)) {
-                return {
-                    file,
-                    oneDriveUrl,
-                    hostedContent: null,
-                };
-            }
-
-            const contentBytes = await prepareImageForHostedContent(file);
-            return {
-                file,
-                oneDriveUrl,
-                hostedContent: {
-                    "@microsoft.graph.temporaryId": (index + 1).toString(),
-                    "contentBytes": contentBytes,
-                    "contentType": file.type || "image/jpeg"
-                }
-            };
-        }))
-        : [];
-
-    const hostedContents = fileEntries
-        .filter((entry) => entry.hostedContent)
-        .map((entry) => entry.hostedContent);
-
-    // 2. Mentions vorbereiten
-    // WICHTIG: Filtere ungültige User ohne ID heraus, um Fehler zu vermeiden
-    const validMentions = mentions.filter(u => u.id && u.displayName);
-
-    const mentionEntities = validMentions.map((user, index) => ({
-        id: index, // ID muss mit dem id im <at> Tag übereinstimmen (Integer im JSON)
-        mentionText: user.displayName, // Plain Text im JSON
+    fileEntries: FileEntry[],
+    mentionEntities: Array<{
+        id: number;
+        mentionText: string;
         mentioned: {
             user: {
-                id: user.id,
-                displayName: user.displayName,
-                userIdentityType: "aadUser"
-            }
-        }
-    }));
-
-    // HTML für Mentions erstellen (z.B. "<at id="0">Max Mustermann</at>")
-    // WICHTIG: escapeHtml nutzen, damit Sonderzeichen das Tag nicht brechen
-    const mentionsHtml = validMentions.map((user, index) => `<at id="${index}">${escapeHtml(user.displayName)}</at>`).join(' ');
-
-    // 3. HTML Body erstellen
+                id: string;
+                displayName: string;
+                userIdentityType: string;
+            };
+        };
+    }>,
+    mentionsHtml: string,
+    omittedImageCount: number
+) => {
     const filesHtml = fileEntries.length > 0 ? fileEntries.map((entry, index) => {
         if (entry.hostedContent) {
             const id = entry.hostedContent["@microsoft.graph.temporaryId"];
@@ -191,13 +164,15 @@ export const postMessageToChannel = async (
             </div>`;
     }).join('') : '';
 
-    // Text zusammenbauen: Mentions vor dem eigentlichen Text
-    // Wir nutzen <p> für den Text-Block
-    const textContent = mentionsHtml 
-        ? `<p>${mentionsHtml} ${escapeHtml(customText || "")}</p>` 
+    const textContent = mentionsHtml
+        ? `<p>${mentionsHtml} ${escapeHtml(customText || "")}</p>`
         : `<p style="font-size: 14px; font-weight: bold; margin-bottom: 12px;">${escapeHtml(customText || (i18n as any).t('postMessage.newFilesUploaded'))}</p>`;
 
-    const messagePayload = {
+    const omittedImagesHtml = omittedImageCount > 0
+        ? `<p style="margin: 12px 0 16px; font-size: 13px; color: #6b7280;">${escapeHtml((i18n as any).t('postMessage.inlineImageLimitNotice', { count: omittedImageCount }))}</p>`
+        : '';
+
+    return {
         body: {
             contentType: "html",
             content: `
@@ -206,14 +181,94 @@ export const postMessageToChannel = async (
                     <div style="display: flex; flex-direction: column; gap: 10px;">
                         ${filesHtml}
                     </div>
+                    ${omittedImagesHtml}
                 </div>
             `
         },
-        hostedContents: hostedContents,
-        mentions: mentionEntities // Mentions zur Payload hinzufügen
+        hostedContents: fileEntries
+            .filter((entry) => entry.hostedContent)
+            .map((entry) => entry.hostedContent),
+        mentions: mentionEntities
     };
+};
 
-    // 4. Senden
+const getPayloadSize = (payload: unknown): number => new Blob([JSON.stringify(payload)]).size;
+
+export const postMessageToChannel = async (
+    accessToken: string,
+    teamId: string,
+    channelId: string,
+    customText: string,
+    imageUrls?: string[],
+    files?: File[],
+    mentions: MentionUser[] = [] 
+): Promise<void> => {
+    const validMentions = mentions.filter(u => u.id && u.displayName);
+
+    const mentionEntities = validMentions.map((user, index) => ({
+        id: index,
+        mentionText: user.displayName,
+        mentioned: {
+            user: {
+                id: user.id,
+                displayName: user.displayName,
+                userIdentityType: "aadUser"
+            }
+        }
+    }));
+
+    const mentionsHtml = validMentions.map((user, index) => `<at id="${index}">${escapeHtml(user.displayName)}</at>`).join(' ');
+    const fileEntries: FileEntry[] = [];
+    let omittedImageCount = 0;
+
+    if (files && files.length > 0) {
+        for (const [index, file] of files.entries()) {
+            const oneDriveUrl = (imageUrls && imageUrls[index]) || "#";
+
+            if (!isImageFile(file)) {
+                fileEntries.push({
+                    file,
+                    oneDriveUrl,
+                    hostedContent: null,
+                });
+                continue;
+            }
+
+            const contentBytes = await prepareImageForHostedContent(file);
+            const candidateEntry: FileEntry = {
+                file,
+                oneDriveUrl,
+                hostedContent: {
+                    "@microsoft.graph.temporaryId": (fileEntries.filter((entry) => entry.hostedContent).length + 1).toString(),
+                    contentBytes,
+                    contentType: file.type || "image/jpeg"
+                }
+            };
+
+            const tentativePayload = buildMessagePayload(
+                customText,
+                [...fileEntries, candidateEntry],
+                mentionEntities,
+                mentionsHtml,
+                omittedImageCount
+            );
+
+            if (getPayloadSize(tentativePayload) <= MAX_MESSAGE_PAYLOAD_BYTES) {
+                fileEntries.push(candidateEntry);
+            } else {
+                omittedImageCount += 1;
+            }
+        }
+    }
+
+    const messagePayload = buildMessagePayload(
+        customText,
+        fileEntries,
+        mentionEntities,
+        mentionsHtml,
+        omittedImageCount
+    );
+
     const messageResponse = await fetch(`https://graph.microsoft.com/v1.0/teams/${teamId}/channels/${channelId}/messages`, {
         method: "POST",
         headers: {
