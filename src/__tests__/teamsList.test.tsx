@@ -497,7 +497,8 @@ describe("TeamsList component", () => {
     dbModule.db.posts.add.mockResolvedValue(123);
     dbModule.db.images.where.mockReturnValue({ 
         equals: jest.fn(() => ({ 
-            toArray: jest.fn().mockResolvedValue([{ file: new File(['a'], 'a.png', { type: 'image/png' }) }]) 
+        toArray: jest.fn().mockResolvedValue([{ file: new File(['a'], 'a.png', { type: 'image/png' }) }]),
+        delete: jest.fn().mockResolvedValue(undefined)
         })) 
     });
     
@@ -507,6 +508,8 @@ describe("TeamsList component", () => {
     (global as any).fetch = jest.fn().mockImplementation((input: RequestInfo) => {
       const url = typeof input === 'string' ? input : (input as any).url;
       if (url.includes('/me/joinedTeams')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: teams }) });
+      if (url.includes('/teams/t1/members')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }) });
+      if (url.includes('/teams/t1/channels')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [{ id: 'c1', displayName: 'General' }] }) });
       if (url.includes('/sites/root')) return Promise.resolve({ ok: true, json: async (): Promise<{ id: string }> => ({ id: 'siteId' }) });
       if (url.includes('/drive') && url.includes('/children')) return Promise.resolve({ ok: true, json: async (): Promise<{ value: any[] }> => ({ value: [] }) });
       if (url.includes('/drive/root:') && url.includes('/content')) return Promise.resolve({ ok: true, json: async (): Promise<{}> => ({}) });
@@ -562,6 +565,8 @@ describe("TeamsList component", () => {
     (global as any).fetch = jest.fn().mockImplementation((input: RequestInfo) => {
       const url = typeof input === 'string' ? input : (input as any).url;
       if (url.includes('/me/joinedTeams')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: teams }) });
+      if (url.includes('/teams/t1/members')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }) });
+      if (url.includes('/teams/t1/channels')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [{ id: 'c1', displayName: 'General' }] }) });
       if (url.includes('/sites/root')) return Promise.resolve({ ok: true, json: async (): Promise<{ id: string }> => ({ id: 'siteId' }) });
       if (url.includes('/drive/root:/') && url.includes('/content')) return Promise.resolve({ ok: true, json: async (): Promise<{}> => ({}) });
       if (url.includes('/drive/root:/') && !url.includes('/content')) return Promise.resolve({ ok: true, json: async (): Promise<{ webUrl: string }> => ({ webUrl: 'https://uploaded-pdf-url' }) });
@@ -610,7 +615,8 @@ describe("TeamsList component", () => {
     dbModule.db.posts.toArray.mockResolvedValue(cachedPosts);
     dbModule.db.images.where.mockReturnValue({ 
         equals: jest.fn(() => ({ 
-            toArray: jest.fn().mockResolvedValue([]) 
+        toArray: jest.fn().mockResolvedValue([]),
+        delete: jest.fn().mockResolvedValue(undefined)
         })) 
     });
 
@@ -620,6 +626,8 @@ describe("TeamsList component", () => {
     (global as any).fetch = jest.fn().mockImplementation((input: RequestInfo) => {
         const url = typeof input === 'string' ? input : (input as any).url;
         if (url.includes('/me/joinedTeams')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: teams }) });
+      if (url.includes('/teams/t1/members')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }) });
+      if (url.includes('/teams/t1/channels')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [{ id: 'c1', displayName: 'General' }] }) });
         if (url.includes('/sites/root')) return Promise.resolve({ ok: true, json: async (): Promise<{ id: string }> => ({ id: 'siteId' }) });
         if (url.includes('/drive') && url.includes('/children')) return Promise.resolve({ ok: true, json: async (): Promise<{ value: any[] }> => ({ value: [] }) });
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }) });
@@ -633,6 +641,82 @@ describe("TeamsList component", () => {
     await waitFor(() => {
         expect(postMessageToChannel).toHaveBeenCalled();
         expect(dbModule.db.posts.delete).toHaveBeenCalledWith(1);
+    });
+  });
+
+  test('syncOfflinePosts keeps offline metadata and uploaded file URLs when replaying cached posts', async () => {
+    const dbModule = require('../db');
+    jest.clearAllMocks();
+
+    const cachedPosts = [{
+      id: 7,
+      teamId: 't1',
+      channelId: 'c1',
+      channelDisplayName: 'General',
+      text: 'Offline Post',
+      imageUrls: [] as string[],
+      timestamp: Date.now(),
+      mentions: [{ id: 'u1', displayName: 'Alice' }],
+      subFolder: 'Folder1'
+    }];
+
+    dbModule.db.posts.toArray.mockResolvedValue(cachedPosts);
+    dbModule.db.images.where.mockReturnValue({
+      equals: jest.fn(() => ({
+        toArray: jest.fn().mockResolvedValue([{ file: new File(['a'], 'offline.png', { type: 'image/png' }) }]),
+        delete: jest.fn().mockResolvedValue(undefined),
+      }))
+    });
+
+    (msal.useMsal as jest.Mock).mockReturnValue({ instance: { acquireTokenSilent: jest.fn().mockResolvedValue({ accessToken: 'mock-token' }) }, accounts: [{}] });
+    (msal.useAccount as jest.Mock).mockReturnValue({ name: 'User', username: 'u@test' });
+
+    (global as any).fetch = jest.fn().mockImplementation((input: RequestInfo, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : (input as any).url;
+      const method = init?.method || 'GET';
+
+      if (url.includes('/me/joinedTeams')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: teams }) });
+      }
+      if (url.includes('/teams/t1/members')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }) });
+      }
+      if (url.includes('/teams/t1/channels')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [{ id: 'c1', displayName: 'General' }] }) });
+      }
+      if (url.includes('/sites/root')) {
+        return Promise.resolve({ ok: true, json: async (): Promise<{ id: string }> => ({ id: 'siteId' }) });
+      }
+      if (url.includes('/drive/root:/General/Bilder/Folder1/offline.png:/content') && method === 'PUT') {
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }
+      if (url.includes('/drive/root:/General/Bilder/Folder1/offline.png') && method === 'GET') {
+        return Promise.resolve({ ok: true, json: async (): Promise<{ webUrl: string }> => ({ webUrl: 'https://uploaded-offline-url' }) });
+      }
+      if (url.includes('/children')) {
+        return Promise.resolve({ ok: true, json: async (): Promise<{ value: any[] }> => ({ value: [] }) });
+      }
+      if (url.includes('/drive/root:/General/Bilder/Folder1') && method === 'GET') {
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }) });
+    });
+
+    (postMessageToChannel as jest.Mock).mockResolvedValue(undefined);
+
+    render(<TeamsList />);
+
+    await waitFor(() => {
+      expect(postMessageToChannel).toHaveBeenCalledWith(
+        'mock-token',
+        't1',
+        'c1',
+        'Offline Post',
+        ['https://uploaded-offline-url'],
+        [expect.objectContaining({ name: 'offline.png', type: 'image/png' })],
+        [{ id: 'u1', displayName: 'Alice' }]
+      );
+      expect(dbModule.db.posts.delete).toHaveBeenCalledWith(7);
     });
   });
 
@@ -659,6 +743,8 @@ describe("TeamsList component", () => {
     (global as any).fetch = jest.fn().mockImplementation((input: RequestInfo) => {
         const url = typeof input === 'string' ? input : (input as any).url;
         if (url.includes('/me/joinedTeams')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: teams }) });
+      if (url.includes('/teams/t1/members')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }) });
+      if (url.includes('/teams/t1/channels')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [{ id: 'c1', displayName: 'General' }] }) });
         if (url.includes('/sites/root')) return Promise.resolve({ ok: true, json: async (): Promise<{ id: string }> => ({ id: 'siteId' }) });
         if (url.includes('/drive/root:/')) return Promise.resolve({ ok: true, json: async () => ({ webUrl: 'https://uploaded-url' }) });
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }) });

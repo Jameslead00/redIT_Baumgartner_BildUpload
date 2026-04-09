@@ -1,5 +1,7 @@
 import { postMessageToChannel } from '../ui-components/PostMessage';
 
+const MAX_MESSAGE_PAYLOAD_BYTES = 3.5 * 1024 * 1024;
+
 describe('postMessageToChannel', () => {
   let originalImage: any;
   let originalCreateObjectURL: any;
@@ -303,5 +305,90 @@ describe('postMessageToChannel', () => {
     expect(body.body.content).toContain('src="../hostedContents/1/$value"');
     expect(body.body.content).toContain('manual.pdf');
     expect(body.body.content).toContain('https://drive/pdf');
+  });
+
+  test('limits inline images when the message payload would exceed the threshold', async () => {
+    const mockFetch = jest.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    (global as any).fetch = mockFetch;
+
+    const largeBase64 = 'a'.repeat(2_000_000);
+    const oversizedFileReader = {
+      readAsDataURL: jest.fn().mockImplementation(function(this: any) {
+        this.result = `data:image/jpeg;base64,${largeBase64}`;
+        if (this.onload) this.onload();
+      }),
+      result: '',
+      onload: null as any,
+      onerror: null as any,
+    };
+
+    jest.spyOn(window, 'FileReader').mockImplementation(() => oversizedFileReader as any);
+
+    const files = [
+      new File(['a'], 'img1.jpg', { type: 'image/jpeg' }),
+      new File(['b'], 'img2.jpg', { type: 'image/jpeg' }),
+      new File(['c'], 'img3.jpg', { type: 'image/jpeg' })
+    ];
+
+    await postMessageToChannel(
+      'token',
+      't1',
+      'c1',
+      'Text',
+      ['https://drive/1', 'https://drive/2', 'https://drive/3'],
+      files,
+      []
+    );
+
+    const options = mockFetch.mock.calls[0][1];
+    const body = JSON.parse(options.body);
+
+    expect(body.hostedContents).toHaveLength(1);
+    expect(body.body.content).toContain('src="../hostedContents/1/$value"');
+    expect(body.body.content).toContain('Es befinden sich noch 2 weitere Bilder in diesem Post');
+    expect(body.body.content).not.toContain('src="../hostedContents/2/$value"');
+    expect(new Blob([JSON.stringify(body)]).size).toBeLessThanOrEqual(MAX_MESSAGE_PAYLOAD_BYTES);
+  });
+
+  test('keeps non-image file links even when inline images are limited', async () => {
+    const mockFetch = jest.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    (global as any).fetch = mockFetch;
+
+    const largeBase64 = 'a'.repeat(2_000_000);
+    const oversizedFileReader = {
+      readAsDataURL: jest.fn().mockImplementation(function(this: any) {
+        this.result = `data:image/jpeg;base64,${largeBase64}`;
+        if (this.onload) this.onload();
+      }),
+      result: '',
+      onload: null as any,
+      onerror: null as any,
+    };
+
+    jest.spyOn(window, 'FileReader').mockImplementation(() => oversizedFileReader as any);
+
+    const files = [
+      new File(['a'], 'img1.jpg', { type: 'image/jpeg' }),
+      new File(['b'], 'img2.jpg', { type: 'image/jpeg' }),
+      new File(['pdf'], 'manual.pdf', { type: 'application/pdf' })
+    ];
+
+    await postMessageToChannel(
+      'token',
+      't1',
+      'c1',
+      'Text',
+      ['https://drive/1', 'https://drive/2', 'https://drive/manual'],
+      files,
+      []
+    );
+
+    const options = mockFetch.mock.calls[0][1];
+    const body = JSON.parse(options.body);
+
+    expect(body.hostedContents).toHaveLength(1);
+    expect(body.body.content).toContain('manual.pdf');
+    expect(body.body.content).toContain('https://drive/manual');
+    expect(body.body.content).toContain('Es befinden sich noch 1 weitere Bilder in diesem Post');
   });
 });

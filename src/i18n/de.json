@@ -76,6 +76,7 @@
   "postMessage": {
     "viewOriginal": "Original anzeigen ↗",
     "viewFile": "Datei öffnen ↗",
-    "newFilesUploaded": "Neue Dateien hochgeladen: "
+    "newFilesUploaded": "Neue Dateien hochgeladen: ",
+    "inlineImageLimitNotice": "Es befinden sich noch {{count}} weitere Bilder in diesem Post, die aufgrund serverseitigen Limitationen nicht angezeigt werden. Sehe diese Bilder direkt im Ordner an."
   }
 }

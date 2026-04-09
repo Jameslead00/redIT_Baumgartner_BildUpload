@@ -128,4 +128,70 @@ describe("ChannelsList component", () => {
       expect(screen.getByText(/Kanäle konnten nicht geladen werden/i)).toBeInTheDocument();
     });
   });
+
+  test("uses cached channels as fallback when online fetch fails", async () => {
+    const msalInstance = { acquireTokenSilent: jest.fn().mockResolvedValue({ accessToken: "mock" }) };
+
+    (msal.useMsal as jest.Mock).mockReturnValue({ instance: msalInstance, accounts: [{}] });
+    (msal.useAccount as jest.Mock).mockReturnValue({ name: "User", username: "user@test" });
+
+    (global as any).fetch.mockResolvedValueOnce({ ok: false });
+
+    render(
+      <ChannelsList
+        team={team}
+        onChannelSelect={onChannelSelect}
+        onUploadSuccess={onUploadSuccess}
+        onCustomTextChange={onCustomTextChange}
+        customText=""
+        isFavorite={true}
+        cachedChannels={[{ id: "c-cache", displayName: "Cached General" }]}
+        cachedSubFolders={{}}
+        cachedAllChannels={[]}
+        cachedAllSubFolders={{}}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Cached General/i)).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText(/Kanäle konnten nicht geladen werden/i)).not.toBeInTheDocument();
+  });
+
+  test("falls back to popup request and renders channels", async () => {
+    const msalInstance = {
+      acquireTokenSilent: jest.fn().mockRejectedValue(new (require('@azure/msal-browser').InteractionRequiredAuthError)('interaction_required', 'interaction required')),
+      acquireTokenPopup: jest.fn().mockResolvedValue({ accessToken: "popup-token" })
+    };
+
+    (msal.useMsal as jest.Mock).mockReturnValue({ instance: msalInstance, accounts: [{}] });
+    (msal.useAccount as jest.Mock).mockReturnValue({ name: "User", username: "user@test" });
+
+    (global as any).fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ value: [{ id: "c-popup", displayName: "Popup Channel" }] })
+    });
+
+    render(
+      <ChannelsList
+        team={team}
+        onChannelSelect={onChannelSelect}
+        onUploadSuccess={onUploadSuccess}
+        onCustomTextChange={onCustomTextChange}
+        customText=""
+        isFavorite={false}
+        cachedChannels={[]}
+        cachedSubFolders={{}}
+        cachedAllChannels={[]}
+        cachedAllSubFolders={{}}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Popup Channel/i)).toBeInTheDocument();
+    });
+
+    expect(msalInstance.acquireTokenPopup).toHaveBeenCalled();
+  });
 });

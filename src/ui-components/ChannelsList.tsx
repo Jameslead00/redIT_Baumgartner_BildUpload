@@ -47,6 +47,7 @@ const ChannelsList: React.FC<ChannelsListProps> = ({
     const { t } = useTranslation();
     const { instance, accounts } = useMsal();
     const account = useAccount(accounts[0] || {});
+    const fallbackChannels = cachedChannels.length > 0 ? cachedChannels : cachedAllChannels;
     const [channels, setChannels] = useState<Channel[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
@@ -67,13 +68,27 @@ const ChannelsList: React.FC<ChannelsListProps> = ({
 
     useEffect(() => {
         const fetchChannels = async () => {
+            setError(null);
+            setLoading(true);
+
             if (!account || !isOnline) {
-                setChannels(cachedAllChannels);  // Verwende gecachte Kanäle aus allen Teams, wenn offline oder nicht eingeloggt
+                setChannels(fallbackChannels);
                 setLoading(false);
                 return;
             }
 
             const request = { ...loginRequest, account };
+
+            const useFallbackOrError = (message: string) => {
+                if (fallbackChannels.length > 0) {
+                    setChannels(fallbackChannels);
+                    setError(null);
+                    return;
+                }
+
+                setChannels([]);
+                setError(message);
+            };
 
             try {
                 const response = await instance.acquireTokenSilent(request);
@@ -87,18 +102,28 @@ const ChannelsList: React.FC<ChannelsListProps> = ({
                     const data = await graphResponse.json();
                     setChannels(data.value);
                 } else {
-                    setError(t('channels.fetchChannelsFailure'));
+                    useFallbackOrError(t('channels.fetchChannelsFailure'));
                 }
             } catch (err) {
                 if (err instanceof InteractionRequiredAuthError) {
-                    instance.acquireTokenPopup(request).then((response) => {
+                    try {
+                        const response = await instance.acquireTokenPopup(request);
                         const accessToken = response.accessToken;
-                        fetch(`https://graph.microsoft.com/v1.0/teams/${team.id}/channels`, {
+                        const popupResponse = await fetch(`https://graph.microsoft.com/v1.0/teams/${team.id}/channels`, {
                             headers: { Authorization: `Bearer ${accessToken}` },
-                        }).then((res) => res.json()).then((data) => setChannels(data.value));
-                    });
+                        });
+
+                        if (popupResponse.ok) {
+                            const data = await popupResponse.json();
+                            setChannels(data.value);
+                        } else {
+                            useFallbackOrError(t('channels.fetchChannelsFailure'));
+                        }
+                    } catch {
+                        useFallbackOrError(t('channels.fetchChannelsError'));
+                    }
                 } else {
-                    setError(t('channels.fetchChannelsError'));
+                    useFallbackOrError(t('channels.fetchChannelsError'));
                 }
             } finally {
                 setLoading(false);
@@ -106,7 +131,7 @@ const ChannelsList: React.FC<ChannelsListProps> = ({
         };
 
         fetchChannels();
-    }, [instance, account, team.id, isOnline, cachedChannels]);
+    }, [instance, account, team.id, isOnline, cachedChannels, cachedAllChannels]);
 
     const handleChannelSelect = (channel: Channel) => {
         setSelectedChannel(channel);
