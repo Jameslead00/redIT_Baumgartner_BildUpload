@@ -194,4 +194,59 @@ describe("ChannelsList component", () => {
 
     expect(msalInstance.acquireTokenPopup).toHaveBeenCalled();
   });
+
+  test("does not reload channels when only customText changes and caches are empty", async () => {
+    const channels = [{ id: "c1", displayName: "General" }];
+    const msalInstance = { acquireTokenSilent: jest.fn().mockResolvedValue({ accessToken: "mock" }) };
+
+    (msal.useMsal as jest.Mock).mockReturnValue({ instance: msalInstance, accounts: [{}] });
+    (msal.useAccount as jest.Mock).mockReturnValue({ name: "User", username: "user@test" });
+
+    (global as any).fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ value: channels })
+    });
+
+    const { rerender } = render(
+      <ChannelsList
+        team={team}
+        onChannelSelect={onChannelSelect}
+        onUploadSuccess={onUploadSuccess}
+        onCustomTextChange={onCustomTextChange}
+        customText=""
+        isFavorite={false}
+        cachedChannels={[]}
+        cachedSubFolders={{}}
+        cachedAllChannels={[]}
+        cachedAllSubFolders={{}}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/General/i)).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByText(/General/i));
+    expect(screen.getByTestId('mock-imageupload')).toBeInTheDocument();
+
+    rerender(
+      <ChannelsList
+        team={team}
+        onChannelSelect={onChannelSelect}
+        onUploadSuccess={onUploadSuccess}
+        onCustomTextChange={onCustomTextChange}
+        customText="a"
+        isFavorite={false}
+        cachedChannels={[]}
+        cachedSubFolders={{}}
+        cachedAllChannels={[]}
+        cachedAllSubFolders={{}}
+      />
+    );
+
+    expect(screen.queryByText(/Kanäle werden geladen/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/General/i)).toBeInTheDocument();
+    expect(screen.getByTestId('mock-imageupload')).toBeInTheDocument();
+    expect((global as any).fetch).toHaveBeenCalledTimes(1);
+  });
 });

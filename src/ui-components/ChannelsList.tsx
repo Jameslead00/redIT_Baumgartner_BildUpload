@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useMsal, useAccount } from "@azure/msal-react";
 import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import { loginRequest } from "../authConfig";
@@ -31,6 +31,8 @@ interface ChannelsListProps {
     cachedAllSubFolders?: { [channelId: string]: SubFolder[] }; // Neue Prop für alle gecachten Subfolders
 }
 
+const EMPTY_CHANNELS: Channel[] = [];
+
 const ChannelsList: React.FC<ChannelsListProps> = ({
     team,
     onChannelSelect,
@@ -38,16 +40,21 @@ const ChannelsList: React.FC<ChannelsListProps> = ({
     onCustomTextChange,
     customText,
     isFavorite,
-    cachedChannels = [],  // Default leer
+    cachedChannels = EMPTY_CHANNELS,
     onSaveOffline,
     cachedSubFolders = {}, // Default empty
-    cachedAllChannels = [], // Neue Prop
+    cachedAllChannels = EMPTY_CHANNELS,
     cachedAllSubFolders = {}, // Neue Prop
 }) => {
     const { t } = useTranslation();
     const { instance, accounts } = useMsal();
     const account = useAccount(accounts[0] || {});
-    const fallbackChannels = cachedChannels.length > 0 ? cachedChannels : cachedAllChannels;
+    const cachedChannelsKey = useMemo(() => cachedChannels.map((channel) => channel.id).join(','), [cachedChannels]);
+    const cachedAllChannelsKey = useMemo(() => cachedAllChannels.map((channel) => channel.id).join(','), [cachedAllChannels]);
+    const fallbackChannels = useMemo(
+        () => (cachedChannels.length > 0 ? cachedChannels : cachedAllChannels),
+        [cachedChannelsKey, cachedAllChannelsKey, cachedChannels, cachedAllChannels]
+    );
     const [channels, setChannels] = useState<Channel[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
@@ -131,7 +138,7 @@ const ChannelsList: React.FC<ChannelsListProps> = ({
         };
 
         fetchChannels();
-    }, [instance, account, team.id, isOnline, cachedChannels, cachedAllChannels]);
+    }, [instance, account, team.id, isOnline, cachedChannelsKey, cachedAllChannelsKey]);
 
     const handleChannelSelect = (channel: Channel) => {
         setSelectedChannel(channel);
