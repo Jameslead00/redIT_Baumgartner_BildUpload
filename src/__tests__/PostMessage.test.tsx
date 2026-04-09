@@ -1,5 +1,7 @@
 import { postMessageToChannel } from '../ui-components/PostMessage';
 
+const MAX_MESSAGE_PAYLOAD_BYTES = 3 * 1024 * 1024;
+
 describe('postMessageToChannel', () => {
   let originalImage: any;
   let originalCreateObjectURL: any;
@@ -309,7 +311,7 @@ describe('postMessageToChannel', () => {
     const mockFetch = jest.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
     (global as any).fetch = mockFetch;
 
-    const largeBase64 = 'a'.repeat(70000);
+    const largeBase64 = 'a'.repeat(2_000_000);
     const oversizedFileReader = {
       readAsDataURL: jest.fn().mockImplementation(function(this: any) {
         this.result = `data:image/jpeg;base64,${largeBase64}`;
@@ -345,14 +347,14 @@ describe('postMessageToChannel', () => {
     expect(body.body.content).toContain('src="../hostedContents/1/$value"');
     expect(body.body.content).toContain('Es befinden sich noch 2 weitere Bilder in diesem Post');
     expect(body.body.content).not.toContain('src="../hostedContents/2/$value"');
-    expect(new Blob([JSON.stringify(body)]).size).toBeLessThanOrEqual(100 * 1024);
+    expect(new Blob([JSON.stringify(body)]).size).toBeLessThanOrEqual(MAX_MESSAGE_PAYLOAD_BYTES);
   });
 
   test('keeps non-image file links even when inline images are limited', async () => {
     const mockFetch = jest.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
     (global as any).fetch = mockFetch;
 
-    const largeBase64 = 'a'.repeat(70000);
+    const largeBase64 = 'a'.repeat(2_000_000);
     const oversizedFileReader = {
       readAsDataURL: jest.fn().mockImplementation(function(this: any) {
         this.result = `data:image/jpeg;base64,${largeBase64}`;
