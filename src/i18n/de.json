@@ -41,7 +41,7 @@
     "fetchChannelsFailure": "Kanäle konnten nicht geladen werden"
   },
   "upload": {
-    "title": "Bilder und PDFs in Ordner \"Bilder\" hochladen",
+    "title": "Bilder, PDFs und Videos in Ordner \"Bilder\" hochladen",
     "subfolderLabel": "Unterordner auswählen (Optional)",
     "noSubfolder": "Kein Unterordner (Direkt in \"Bilder\")",
     "noSubfoldersFound": "Keine Unterordner gefunden.",
@@ -56,6 +56,7 @@
     "saveOffline": "Offline speichern",
     "uploadSuccess": "{{count}} Datei(en) erfolgreich hochgeladen!",
     "uploadFailed": "Upload fehlgeschlagen",
+    "videoTooLarge": "{{count}} Video-Datei(en) überschreiten das Limit von {{maxSizeMB}} MB.",
     "savedOffline": "{{count}} Datei(en) offline gespeichert!",
     "uploadingImage": "Datei {{current}} von {{total}} wird hochgeladen"
   },

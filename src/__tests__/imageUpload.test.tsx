@@ -276,6 +276,94 @@ describe('ImageUpload component (unit)', () => {
     });
   });
 
+  test('video upload shows VIDEO placeholder and passes video file to onUploadSuccess', async () => {
+    msalStub.accounts = [{}];
+    msalStub.instance.acquireTokenSilent = jest.fn().mockResolvedValue({ accessToken: 'mock' });
+    (UploadModule.encodeFilesToBase64 as jest.Mock).mockResolvedValue([]);
+
+    const onUploadSuccess = jest.fn();
+    const team = { id: 't1', displayName: 'Team A' };
+    const channel = { id: 'c1', displayName: 'General' };
+
+    (global as any).fetch = jest.fn().mockImplementation((input: RequestInfo, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : (input as any).url;
+      const method = init?.method || 'GET';
+
+      if (url.includes('/groups/') && url.includes('/sites/root')) {
+        return Promise.resolve({ ok: true, json: async (): Promise<{ id: string }> => ({ id: 'siteId' }) });
+      }
+      if (method === 'GET' && url.includes('/drive/root:/General/Bilder') && !url.includes('clip.mp4')) {
+        return Promise.resolve({ ok: true, json: async (): Promise<{}> => ({}) });
+      }
+      if (method === 'PUT' && url.includes('/content')) {
+        return Promise.resolve({ ok: true });
+      }
+      if (method === 'GET' && url.includes('clip.mp4')) {
+        return Promise.resolve({ ok: true, json: async (): Promise<{ webUrl: string }> => ({ webUrl: 'https://weburl.video' }) });
+      }
+
+      return Promise.resolve({ ok: true, json: async (): Promise<{ value: any[] }> => ({ value: [] }) });
+    });
+
+    render(
+      <ImageUpload
+        team={team}
+        channel={channel}
+        customText=""
+        onUploadSuccess={onUploadSuccess}
+        onCustomTextChange={() => {}}
+        cachedSubFolders={[]}
+      />
+    );
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(['video'], 'clip.mp4', { type: 'video/mp4' });
+    await userEvent.upload(input, file);
+
+    await waitFor(() => expect(screen.getByText(/clip.mp4/i)).toBeInTheDocument());
+    expect(screen.getByText('VIDEO')).toBeInTheDocument();
+    expect(UploadModule.resizeImage).not.toHaveBeenCalled();
+
+    const uploadBtn = screen.getByRole('button', { name: /Beitrag hochladen/i });
+    await userEvent.click(uploadBtn);
+
+    await waitFor(() => {
+      expect(onUploadSuccess).toHaveBeenCalledWith(
+        ['https://weburl.video'],
+        [expect.objectContaining({ name: 'clip.mp4', type: 'video/mp4' })],
+        []
+      );
+    });
+  });
+
+  test('oversized video is rejected with snackbar message', async () => {
+    msalStub.accounts = [{}];
+    const team = { id: 't1', displayName: 'Team A' };
+    const channel = { id: 'c1', displayName: 'General' };
+
+    render(
+      <ImageUpload
+        team={team}
+        channel={channel}
+        customText=""
+        onUploadSuccess={() => {}}
+        onCustomTextChange={() => {}}
+        cachedSubFolders={[]}
+      />
+    );
+
+    const hugeVideo = new File(['v'], 'huge.mp4', { type: 'video/mp4' });
+    Object.defineProperty(hugeVideo, 'size', { value: 101 * 1024 * 1024 });
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await userEvent.upload(input, hugeVideo);
+
+    await waitFor(() => {
+      expect(screen.getByText(/überschreiten das Limit von 100 MB/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/huge.mp4/i)).not.toBeInTheDocument();
+  });
+
   test('uploadImages creates folder when missing and calls uploadSmallFile', async () => {
     // Provide account via msal stub
     msalStub.accounts = [{}];

@@ -1,4 +1,4 @@
-import { getFolderPath, checkFolderExists, createFolder, uploadLargeFile, uploadSmallFile, encodeFilesToBase64 } from '../ui-components/ImageUpload';
+import { getFolderPath, checkFolderExists, createFolder, uploadLargeFile, uploadSmallFile, encodeFilesToBase64, isVideoFile, isSupportedUploadFile } from '../ui-components/ImageUpload';
 import '@testing-library/jest-dom';
 
 describe('ImageUpload helpers', () => {
@@ -150,5 +150,21 @@ describe('ImageUpload helpers', () => {
     expect(res[0].startsWith('data:image/png;base64,')).toBeTruthy();
     expect(resizeSpy).toHaveBeenCalled();
     resizeSpy.mockRestore();
+  });
+
+  test('isVideoFile returns true for allowed extensions and mime types', () => {
+    const mp4ByMime = new File(['video'], 'clip.unknown', { type: 'video/mp4' });
+    const mkvByExt = new File(['video'], 'clip.mkv', { type: '' });
+
+    expect(isVideoFile(mp4ByMime)).toBe(true);
+    expect(isVideoFile(mkvByExt)).toBe(true);
+  });
+
+  test('isSupportedUploadFile includes video files', () => {
+    const video = new File(['video'], 'demo.mp4', { type: 'video/mp4' });
+    const text = new File(['txt'], 'notes.txt', { type: 'text/plain' });
+
+    expect(isSupportedUploadFile(video)).toBe(true);
+    expect(isSupportedUploadFile(text)).toBe(false);
   });
 });
