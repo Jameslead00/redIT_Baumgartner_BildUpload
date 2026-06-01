@@ -606,6 +606,66 @@ describe("TeamsList component", () => {
     }, { timeout: 3000 });
   });
 
+  test('saveOfflinePost syncs video files immediately when online', async () => {
+    const dbModule = require('../db');
+    jest.clearAllMocks();
+
+    dbModule.db.posts.toArray.mockResolvedValue([]);
+    dbModule.db.posts.add.mockResolvedValue(456);
+    dbModule.db.images.where.mockReturnValue({
+      equals: jest.fn(() => ({
+        toArray: jest.fn().mockResolvedValue([{ file: new File(['video'], 'clip.mp4', { type: 'video/mp4' }) }]),
+        delete: jest.fn().mockResolvedValue(undefined),
+      }))
+    });
+
+    (msal.useMsal as jest.Mock).mockReturnValue({ instance: { acquireTokenSilent: jest.fn().mockResolvedValue({ accessToken: 'mock-token' }) }, accounts: [{}] });
+    (msal.useAccount as jest.Mock).mockReturnValue({ name: 'User', username: 'u@test' });
+
+    (global as any).fetch = jest.fn().mockImplementation((input: RequestInfo) => {
+      const url = typeof input === 'string' ? input : (input as any).url;
+      if (url.includes('/me/joinedTeams')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: teams }) });
+      if (url.includes('/teams/t1/members')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }) });
+      if (url.includes('/teams/t1/channels')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [{ id: 'c1', displayName: 'General' }] }) });
+      if (url.includes('/sites/root')) return Promise.resolve({ ok: true, json: async (): Promise<{ id: string }> => ({ id: 'siteId' }) });
+      if (url.includes('/drive/root:/') && url.includes('/content')) return Promise.resolve({ ok: true, json: async (): Promise<{}> => ({}) });
+      if (url.includes('/drive/root:/') && !url.includes('/content')) return Promise.resolve({ ok: true, json: async (): Promise<{ webUrl: string }> => ({ webUrl: 'https://uploaded-video-url' }) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }) });
+    });
+
+    (postMessageToChannel as jest.Mock).mockResolvedValue(undefined);
+
+    render(<TeamsList />);
+
+    const input = await screen.findByLabelText(/Teams suchen/i);
+    await userEvent.click(input);
+    await userEvent.type(input, 'Team One');
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+
+    let props = (global as any).__lastChannelsListProps;
+    await act(async () => {
+      props.onChannelSelect({ id: 'c1', displayName: 'General' });
+    });
+    await new Promise((r) => setTimeout(r, 0));
+
+    props = (global as any).__lastChannelsListProps;
+    await act(async () => {
+      await props.onSaveOffline([new File(['video'], 'clip.mp4', { type: 'video/mp4' })], '');
+    });
+
+    await waitFor(() => {
+      expect(postMessageToChannel).toHaveBeenCalledWith(
+        'mock-token',
+        't1',
+        'c1',
+        '',
+        ['https://uploaded-video-url'],
+        [expect.objectContaining({ name: 'clip.mp4', type: 'video/mp4' })],
+        []
+      );
+    }, { timeout: 3000 });
+  });
+
   test('syncOfflinePosts uploads cached posts automatically when online', async () => {
     const dbModule = require('../db');
     jest.clearAllMocks();

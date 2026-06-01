@@ -43,11 +43,41 @@ export const isImageFile = (file: File): boolean => file.type.startsWith('image/
 
 export const isPdfFile = (file: File): boolean => file.type === 'application/pdf';
 
-export const isSupportedUploadFile = (file: File): boolean => isImageFile(file) || isPdfFile(file);
+const ALLOWED_VIDEO_EXTENSIONS = ['mp4', 'mov', 'avi', 'webm', 'mkv'];
+const ALLOWED_VIDEO_MIME_TYPES = new Set([
+    'video/mp4',
+    'video/quicktime',
+    'video/x-msvideo',
+    'video/avi',
+    'video/msvideo',
+    'video/webm',
+    'video/x-matroska',
+]);
+
+const MAX_VIDEO_FILE_SIZE_MB = 100;
+const MAX_VIDEO_FILE_SIZE_BYTES = MAX_VIDEO_FILE_SIZE_MB * 1024 * 1024;
+
+const getFileExtension = (fileName: string): string => {
+    const dotIndex = fileName.lastIndexOf('.');
+    if (dotIndex === -1 || dotIndex === fileName.length - 1) {
+        return '';
+    }
+    return fileName.substring(dotIndex + 1).toLowerCase();
+};
+
+export const isVideoFile = (file: File): boolean => {
+    const extension = getFileExtension(file.name);
+    return ALLOWED_VIDEO_MIME_TYPES.has(file.type) || ALLOWED_VIDEO_EXTENSIONS.includes(extension);
+};
+
+export const isSupportedUploadFile = (file: File): boolean => isImageFile(file) || isPdfFile(file) || isVideoFile(file);
 
 const getFilePreviewLabel = (file: File): string => {
     if (isPdfFile(file)) {
         return 'PDF';
+    }
+    if (isVideoFile(file)) {
+        return 'VIDEO';
     }
     return file.name.charAt(0).toUpperCase();
 };
@@ -342,7 +372,21 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files && event.target.files.length > 0) {
-            const newFiles = Array.from(event.target.files).filter(isSupportedUploadFile);
+            const incomingFiles = Array.from(event.target.files).filter(isSupportedUploadFile);
+            const oversizedVideos = incomingFiles.filter((file) => isVideoFile(file) && file.size > MAX_VIDEO_FILE_SIZE_BYTES);
+            const newFiles = incomingFiles.filter((file) => !oversizedVideos.includes(file));
+
+            if (oversizedVideos.length > 0) {
+                setSnackbarMessage(t('upload.videoTooLarge', { count: oversizedVideos.length, maxSizeMB: MAX_VIDEO_FILE_SIZE_MB }));
+                setSnackbarSeverity('error');
+                setSnackbarOpen(true);
+            }
+
+            if (newFiles.length === 0) {
+                event.target.value = "";
+                return;
+            }
+
             setSelectedFiles(prev => [...prev, ...newFiles]);
             
             const generateThumbnails = async () => {
@@ -541,7 +585,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
 
             <input
                 type="file"
-                accept="image/*,application/pdf"
+                accept="image/*,application/pdf,.mp4,.mov,.avi,.webm,.mkv"
                 multiple
                 onChange={handleFileChange}
                 ref={fileInputRef}

@@ -161,7 +161,7 @@ describe("Key translations spot-check", () => {
     ["auth.authInProgress", "Authentifizierung läuft...", "Authentification en cours..."],
     ["teams.selectTeam", "Team auswählen", "Sélectionner une team"],
     ["channels.selectChannel", "Kanal auswählen", "Sélectionner un canal"],
-    ["upload.title", "Bilder und PDFs in Ordner \"Bilder\" hochladen", "Télécharger des images et des PDF dans le dossier \"Bilder\""],
+    ["upload.title", "Bilder, PDFs und Videos in Ordner \"Bilder\" hochladen", "Télécharger des images, des PDF et des vidéos dans le dossier \"Bilder\""],
     ["error.occurred", "Ein Fehler ist aufgetreten: ", "Une erreur s'est produite : "],
     ["error.unknown", "Unbekannter Fehler", "Erreur inconnue"],
   ];

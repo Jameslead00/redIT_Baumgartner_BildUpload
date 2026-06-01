@@ -41,7 +41,7 @@
     "fetchChannelsFailure": "Impossible de charger les canaux"
   },
   "upload": {
-    "title": "Télécharger des images et des PDF dans le dossier \"Bilder\"",
+    "title": "Télécharger des images, des PDF et des vidéos dans le dossier \"Bilder\"",
     "subfolderLabel": "Sélectionner un sous-dossier (Optionnel)",
     "noSubfolder": "Pas de sous-dossier (Directement dans \"Bilder\")",
     "noSubfoldersFound": "Aucun sous-dossier trouvé.",
@@ -56,6 +56,7 @@
     "saveOffline": "Enregistrer offline",
     "uploadSuccess": "{{count}} fichier(s) téléchargé(s) avec succès !",
     "uploadFailed": "Échec du téléchargement",
+    "videoTooLarge": "{{count}} fichier(s) vidéo dépassent la limite de {{maxSizeMB}} MB.",
     "savedOffline": "{{count}} fichier(s) enregistré(s) hors ligne !",
     "uploadingImage": "Téléchargement du fichier {{current}} sur {{total}}"
   },
