@@ -271,6 +271,23 @@ describe('postMessageToChannel', () => {
         .rejects.toThrow('Canvas toBlob failed');
   });
 
+  test('renders video files with SharePoint stream URL instead of raw download URL', async () => {
+    const mockFetch = jest.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    (global as any).fetch = mockFetch;
+
+    const files = [new File(['video'], 'clip.mp4', { type: 'video/mp4' })];
+    const rawUrl = 'https://tenant.sharepoint.com/sites/MySite/Shared%20Documents/General/Bilder/clip.mp4';
+    await postMessageToChannel('token', 't1', 'c1', 'Text', [rawUrl], files, []);
+
+    const options = mockFetch.mock.calls[0][1];
+    const body = JSON.parse(options.body);
+
+    expect(body.body.content).toContain('/_layouts/15/stream.aspx?id=');
+    // Raw download URL must NOT appear as link href
+    expect(body.body.content).not.toContain(`href="${rawUrl}"`);
+    expect(body.body.content).toContain('clip.mp4');
+  });
+
   test('renders pdf files as links without hosted content', async () => {
     const mockFetch = jest.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
     (global as any).fetch = mockFetch;

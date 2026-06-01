@@ -13,6 +13,30 @@ export interface MentionUser {
 
 const isImageFile = (file: File): boolean => file.type.startsWith('image/');
 
+const VIDEO_MIME_TYPES = new Set([
+    'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/avi',
+    'video/msvideo', 'video/webm', 'video/x-matroska',
+]);
+const VIDEO_EXTENSIONS = ['mp4', 'mov', 'avi', 'webm', 'mkv'];
+
+const isVideoFile = (file: File): boolean => {
+    if (VIDEO_MIME_TYPES.has(file.type)) return true;
+    const ext = file.name.substring(file.name.lastIndexOf('.') + 1).toLowerCase();
+    return VIDEO_EXTENSIONS.includes(ext);
+};
+
+// Converts a raw SharePoint file URL to the SharePoint Stream viewer URL so
+// videos open inline instead of triggering a browser download.
+// Uses string/regex to avoid dependency on the URL constructor (which may be
+// unavailable in certain test environments).
+const toVideoStreamUrl = (webUrl: string): string => {
+    const match = webUrl.match(/^(https?:\/\/[^/]+)(\/sites\/[^/]+)(\/.*)?$/);
+    if (!match) return webUrl;
+    const [, origin, sitePath, filePath = ''] = match;
+    const fullDecodedPath = decodeURIComponent(sitePath + filePath);
+    return `${origin}${sitePath}/_layouts/15/stream.aspx?id=${encodeURIComponent(fullDecodedPath)}`;
+};
+
 interface HostedContent {
     "@microsoft.graph.temporaryId": string;
     contentBytes: string;
@@ -157,10 +181,11 @@ const buildMessagePayload = (
                 </div>`;
         }
 
+        const displayUrl = isVideoFile(entry.file) ? toVideoStreamUrl(entry.oneDriveUrl) : entry.oneDriveUrl;
         return `
             <div style="margin-bottom: 16px; padding: 12px; border: 1px solid #d1d5db; border-radius: 4px;">
                 <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">${escapeHtml(entry.file.name)}</div>
-                <a href="${entry.oneDriveUrl}" target="_blank" style="font-size: 12px; color: #5b5fc7; text-decoration: none;">
+                <a href="${displayUrl}" target="_blank" style="font-size: 12px; color: #5b5fc7; text-decoration: none;">
                     ${(i18n as any).t('postMessage.viewFile')}
                 </a>
             </div>`;
