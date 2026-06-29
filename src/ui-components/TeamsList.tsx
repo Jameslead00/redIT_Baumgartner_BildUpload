@@ -8,7 +8,7 @@ import ChannelsList from "./ChannelsList";
 import { postMessageToChannel, MentionUser } from "./PostMessage"; // MentionUser importieren
 import { Autocomplete, TextField, Button, Typography, Box, Alert, IconButton, Snackbar } from "@mui/material";
 import { Star, StarBorder } from "@mui/icons-material";
-import { checkFolderExists, createFolder, uploadLargeFile, uploadSmallFile, encodeFilesToBase64, getFolderPath } from './ImageUpload';
+import { checkFolderExists, createFolder, uploadLargeFile, uploadSmallFile, encodeFilesToBase64, getFolderPath, GraphOperationError, isGraphOperationError } from './ImageUpload';
 import { useTranslation } from "react-i18next";
 
 const TeamsList: React.FC = () => {
@@ -41,6 +41,13 @@ const TeamsList: React.FC = () => {
 
     // Ref, um zu verhindern, dass Sync mehrmals läuft
     const hasSyncedRef = useRef(false);
+
+    const createCorrelationId = (): string => {
+        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+            return crypto.randomUUID();
+        }
+        return `cid-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    };
 
     // Online-Status überwachen
     useEffect(() => {
@@ -564,11 +571,16 @@ const TeamsList: React.FC = () => {
     const syncPost = async (post: any, onProgress?: (current: number, total: number) => void) => {
         if (!account || !isOnline) return;
         setPosting(true);
+        const correlationId = createCorrelationId();
+        let folderPath = '';
+        let accessTokenForErrorLog: string | null = null;
+        let currentStep = 'init';
         try {
-            console.log('Starte Sync für Post:', post.id);
+            console.log(`[${correlationId}] Starte Sync für Post:`, post.id);
             const request = { ...loginRequest, account };
             const response = await instance.acquireTokenSilent(request);
             const accessToken = response.accessToken;
+            accessTokenForErrorLog = accessToken;
 
             // Bilder aus Dexie laden
             const images = await db.images.where('postId').equals(post.id).toArray();
@@ -577,24 +589,54 @@ const TeamsList: React.FC = () => {
             // HINWEIS: encodeFilesToBase64 wird nicht mehr benötigt für den Post
 
             // Ordner und Site-ID prüfen
+            currentStep = 'resolveSite';
             const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/groups/${post.teamId}/sites/root`, {
                 headers: { Authorization: `Bearer ${accessToken}` },
             });
+
+            if (!siteResponse.ok) {
+                const responseBody = await siteResponse.text();
+                throw new GraphOperationError('Failed to resolve SharePoint site', {
+                    status: siteResponse.status,
+                    statusText: siteResponse.statusText,
+                    responseBody,
+                    operation: 'resolveSite',
+                    teamId: post.teamId,
+                    channelId: post.channelId,
+                    channelDisplayName: post.channelDisplayName,
+                    correlationId,
+                });
+            }
+
             const siteData = await siteResponse.json();
             const siteId = siteData.id;
-            console.log('Site ID:', siteId);
+            console.log(`[${correlationId}] Site ID:`, siteId);
 
             // Bestimme den Ordner-Pfad
-            let folderPath = getFolderPath(post.channelDisplayName);
+            folderPath = getFolderPath(post.channelDisplayName);
             // NEW: Append Subfolder if exists
             if (post.subFolder) {
                 folderPath = `${folderPath}/${post.subFolder}`;
             }
-            console.log('Verwende Ordner-Pfad:', folderPath);
+            console.log(`[${correlationId}] Verwende Ordner-Pfad:`, folderPath);
 
             // Ordner prüfen/erstellen
-            const folderExists = await checkFolderExists(accessToken, siteId, folderPath);
-            if (!folderExists) await createFolder(accessToken, siteId, folderPath);
+            currentStep = 'checkFolder';
+            const folderExists = await checkFolderExists(accessToken, siteId, folderPath, {
+                correlationId,
+                teamId: post.teamId,
+                channelId: post.channelId,
+                channelDisplayName: post.channelDisplayName,
+            });
+            if (!folderExists) {
+                currentStep = 'createFolder';
+                await createFolder(accessToken, siteId, folderPath, {
+                    correlationId,
+                    teamId: post.teamId,
+                    channelId: post.channelId,
+                    channelDisplayName: post.channelDisplayName,
+                });
+            }
 
             // Hochladen
             const uploadedUrls: string[] = [];
@@ -611,40 +653,33 @@ const TeamsList: React.FC = () => {
                 }
 
                 const img = images[i];
-                console.log('Lade Bild hoch:', img.file.name);
+                currentStep = 'uploadFile';
+                console.log(`[${correlationId}] Lade Bild hoch:`, img.file.name);
                 let url: string;
                 if (img.file.size > 4 * 1024 * 1024) {
-                    url = await uploadLargeFile(accessToken, siteId, img.file, folderPath);
+                    url = await uploadLargeFile(accessToken, siteId, img.file, folderPath, {
+                        correlationId,
+                        teamId: post.teamId,
+                        channelId: post.channelId,
+                        channelDisplayName: post.channelDisplayName,
+                    });
                 } else {
-                    url = await uploadSmallFile(accessToken, siteId, img.file, folderPath);
+                    url = await uploadSmallFile(accessToken, siteId, img.file, folderPath, {
+                        correlationId,
+                        teamId: post.teamId,
+                        channelId: post.channelId,
+                        channelDisplayName: post.channelDisplayName,
+                    });
                 }
-                console.log('Hochgeladene URL:', url);
+                console.log(`[${correlationId}] Hochgeladene URL:`, url);
                 uploadedUrls.push(url);
-            }
-
-            // LOGGING HINZUFÜGEN
-            try {
-                const totalSizeMB = files.reduce((acc, file) => acc + file.size, 0) / (1024 * 1024);
-                // Versuche Team-Namen zu finden oder nutze ID
-                const teamName = teams.find(t => t.id === post.teamId)?.displayName || post.teamId;
-                
-                await logToSharePoint(accessToken, {
-                    userEmail: account.username,
-                    // NEW: Log the specific subfolder in sourceUrl
-                    sourceUrl: `Team: ${teamName} / Channel: ${post.channelDisplayName} / Folder: ${post.subFolder || "Root"} (Sync)`,
-                    photoCount: files.length,
-                    totalSizeMB: parseFloat(totalSizeMB.toFixed(2)),
-                    targetTeamName: teamName,
-                    status: 'Success'
-                });
-            } catch (logErr) {
-                console.error("Logging-Fehler:", logErr);
             }
             
             //Mentions aus dem Post-Objekt holen
             const mentions = post.mentions || [];
 
             // Posten - Jetzt mit files UND mentions
+            currentStep = 'postMessage';
             await postMessageToChannel(
                 accessToken, 
                 post.teamId, 
@@ -652,16 +687,72 @@ const TeamsList: React.FC = () => {
                 post.text, 
                 uploadedUrls, 
                 files, 
-                mentions
+                mentions,
+                { correlationId }
             );
+
+            // LOGGING HINZUFÜGEN (nur bei End-to-End Erfolg)
+            currentStep = 'logSuccess';
+            const totalSizeMB = files.reduce((acc, file) => acc + file.size, 0) / (1024 * 1024);
+            const teamName = teams.find(t => t.id === post.teamId)?.displayName || post.teamId;
+            const successLogResult = await logToSharePoint(accessToken, {
+                userEmail: account.username,
+                sourceUrl: window.location.href,
+                photoCount: files.length,
+                totalSizeMB: parseFloat(totalSizeMB.toFixed(2)),
+                targetTeamName: teamName,
+                status: 'Success',
+                correlationId,
+                step: currentStep,
+                teamId: post.teamId,
+                channelId: post.channelId,
+                channelDisplayName: post.channelDisplayName,
+                folderPath,
+                operation: 'syncPost',
+            });
+            if (!successLogResult.ok) {
+                console.error(`[${correlationId}] Logging-Fehler nach erfolgreichem Post:`, successLogResult.status, successLogResult.body);
+            }
             
             await db.posts.delete(post.id);
             await db.images.where('postId').equals(post.id).delete();
-            console.log('Post synced und gelöscht');
+            console.log(`[${correlationId}] Post synced und gelöscht`);
         } catch (err) {
-            console.error('Sync-Fehler für Post', post.id, ':', err);
+            const graphErr = isGraphOperationError(err) ? err : null;
+            console.error(`[${correlationId}] Sync-Fehler für Post ${post.id}:`, err);
+
+            if (accessTokenForErrorLog) {
+                const errorLogResult = await logToSharePoint(accessTokenForErrorLog, {
+                    userEmail: account.username,
+                    sourceUrl: window.location.href,
+                    photoCount: 0,
+                    totalSizeMB: 0,
+                    targetTeamName: teams.find(t => t.id === post.teamId)?.displayName || post.teamId,
+                    status: 'Error',
+                    correlationId,
+                    step: currentStep,
+                    teamId: post.teamId,
+                    channelId: post.channelId,
+                    channelDisplayName: post.channelDisplayName,
+                    folderPath: graphErr?.folderPath || folderPath,
+                    operation: graphErr?.operation || 'syncPost',
+                    httpStatus: graphErr?.status,
+                    httpStatusText: graphErr?.statusText,
+                    responseBody: graphErr?.responseBody,
+                    errorMessage: err instanceof Error ? err.message : String(err),
+                });
+
+                if (!errorLogResult.ok) {
+                    console.error(`[${correlationId}] AppLog Error-Write fehlgeschlagen:`, errorLogResult.status, errorLogResult.body);
+                }
+            } else {
+                console.error(`[${correlationId}] AppLog Error-Write übersprungen, da kein Access Token verfügbar ist.`);
+            }
+
+            throw err;
+        } finally {
+            setPosting(false);
         }
-        setPosting(false);
     };
 
     // ÄNDERUNG: Callback Signatur angepasst
@@ -713,7 +804,8 @@ const TeamsList: React.FC = () => {
         console.log('Starte automatische Sync für', offlinePosts.length, 'Posts');
         for (const post of offlinePosts) {
             try {
-                console.log('Sync Post:', post.id);
+                const correlationId = createCorrelationId();
+                console.log(`[${correlationId}] Sync Post:`, post.id);
                 const request = { ...loginRequest, account };
                 const response = await instance.acquireTokenSilent(request);
                 const accessToken = response.accessToken;
@@ -730,7 +822,7 @@ const TeamsList: React.FC = () => {
                 });
                 const siteData = await siteResponse.json();
                 const siteId = siteData.id;
-                console.log('Site ID:', siteId);
+                console.log(`[${correlationId}] Site ID:`, siteId);
 
                 // Bestimme den Ordner-Pfad
                 let folderPath = getFolderPath(post.channelDisplayName);
@@ -738,23 +830,45 @@ const TeamsList: React.FC = () => {
                 if (post.subFolder) {
                     folderPath = `${folderPath}/${post.subFolder}`;
                 }
-                console.log('Verwende Ordner-Pfad:', folderPath);
+                console.log(`[${correlationId}] Verwende Ordner-Pfad:`, folderPath);
 
                 // Ordner prüfen/erstellen
-                const folderExists = await checkFolderExists(accessToken, siteId, folderPath);
-                if (!folderExists) await createFolder(accessToken, siteId, folderPath);
+                const folderExists = await checkFolderExists(accessToken, siteId, folderPath, {
+                    correlationId,
+                    teamId: post.teamId,
+                    channelId: post.channelId,
+                    channelDisplayName: post.channelDisplayName,
+                });
+                if (!folderExists) {
+                    await createFolder(accessToken, siteId, folderPath, {
+                        correlationId,
+                        teamId: post.teamId,
+                        channelId: post.channelId,
+                        channelDisplayName: post.channelDisplayName,
+                    });
+                }
 
                 // Hochladen
                 const uploadedUrls: string[] = [];
                 for (const img of images) {
-                    console.log('Lade Bild hoch:', img.file.name);
+                    console.log(`[${correlationId}] Lade Bild hoch:`, img.file.name);
                     let url: string;
                     if (img.file.size > 4 * 1024 * 1024) {
-                        url = await uploadLargeFile(accessToken, siteId, img.file, folderPath);
+                        url = await uploadLargeFile(accessToken, siteId, img.file, folderPath, {
+                            correlationId,
+                            teamId: post.teamId,
+                            channelId: post.channelId,
+                            channelDisplayName: post.channelDisplayName,
+                        });
                     } else {
-                        url = await uploadSmallFile(accessToken, siteId, img.file, folderPath);
+                        url = await uploadSmallFile(accessToken, siteId, img.file, folderPath, {
+                            correlationId,
+                            teamId: post.teamId,
+                            channelId: post.channelId,
+                            channelDisplayName: post.channelDisplayName,
+                        });
                     }
-                    console.log('Hochgeladene URL:', url);
+                    console.log(`[${correlationId}] Hochgeladene URL:`, url);
                     uploadedUrls.push(url);
                 }
 
@@ -769,12 +883,13 @@ const TeamsList: React.FC = () => {
                     post.text, 
                     uploadedUrls, 
                     files, 
-                    mentions // <--- HIER übergeben
+                    mentions,
+                    { correlationId }
                 );
                 
                 await db.posts.delete(post.id);
                 await db.images.where('postId').equals(post.id).delete();
-                console.log('Post synced und gelöscht');
+                console.log(`[${correlationId}] Post synced und gelöscht`);
             } catch (err) {
                 console.error('Sync-Fehler für Post', post.id, ':', err);
             }

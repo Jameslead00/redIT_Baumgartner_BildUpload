@@ -112,18 +112,21 @@ describe('Utils tests', () => {
     Object.defineProperty(window, 'location', { value: originBackup });
   });
 
-  test('logToSharePoint handles success and failure', async () => {
+  test('logToSharePoint handles success and failure with structured result', async () => {
     // stub window.location
     const originalLocation = window.location;
     Object.defineProperty(window, 'location', { value: { href: 'https://app.test' }, writable: true });
 
+    const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
     const mockFetch = jest.fn()
       .mockResolvedValueOnce({ ok: true, text: async () => 'ok' })
-      .mockResolvedValueOnce({ ok: false, text: async () => 'error' });
+      .mockResolvedValueOnce({ ok: false, status: 500, statusText: 'Internal Server Error', text: async () => 'error' });
 
     (global as any).fetch = mockFetch;
 
-    await logToSharePoint('token', {
+    const success = await logToSharePoint('token', {
       userEmail: 'a@b.com',
       sourceUrl: 'u',
       photoCount: 1,
@@ -132,7 +135,7 @@ describe('Utils tests', () => {
       status: 'Success'
     });
 
-    await logToSharePoint('token', {
+    const failure = await logToSharePoint('token', {
       userEmail: 'a@b.com',
       sourceUrl: 'u',
       photoCount: 1,
@@ -142,6 +145,11 @@ describe('Utils tests', () => {
     });
 
     expect(mockFetch).toHaveBeenCalled();
+    expect(success).toEqual({ ok: true });
+    expect(failure).toEqual({ ok: false, status: 500, body: 'error' });
+
+    consoleLogSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
     Object.defineProperty(window, 'location', { value: originalLocation });
   });
 

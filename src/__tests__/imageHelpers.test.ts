@@ -12,11 +12,16 @@ describe('ImageUpload helper functions', () => {
     expect(getFolderPath('General')).toBe('General/Bilder');
   });
 
-  test('checkFolderExists returns true/false based on fetch', async () => {
+  test('checkFolderExists returns true and false only for 404', async () => {
     (global as any).fetch.mockResolvedValueOnce({ ok: true });
     expect(await checkFolderExists('token', 'site', 'path')).toBe(true);
-    (global as any).fetch.mockResolvedValueOnce({ ok: false });
+    (global as any).fetch.mockResolvedValueOnce({ ok: false, status: 404, statusText: 'Not Found', text: async () => '' });
     expect(await checkFolderExists('token', 'site', 'path')).toBe(false);
+  });
+
+  test('checkFolderExists throws for non-404 errors', async () => {
+    (global as any).fetch.mockResolvedValueOnce({ ok: false, status: 403, statusText: 'Forbidden', text: async () => 'forbidden' });
+    await expect(checkFolderExists('token', 'site', 'path')).rejects.toThrow(/Failed to check folder existence/);
   });
 
   test('createFolder posts to the createApi and throws on error', async () => {

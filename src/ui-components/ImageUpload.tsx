@@ -39,6 +39,83 @@ interface FileData {
     data: string;
 }
 
+export interface GraphOperationContext {
+    operation: string;
+    teamId?: string;
+    channelId?: string;
+    channelDisplayName?: string;
+    folderPath?: string;
+    correlationId?: string;
+}
+
+export class GraphOperationError extends Error {
+    public readonly status: number;
+    public readonly statusText: string;
+    public readonly responseBody: string;
+    public readonly operation: string;
+    public readonly folderPath?: string;
+    public readonly teamId?: string;
+    public readonly channelId?: string;
+    public readonly channelDisplayName?: string;
+    public readonly correlationId?: string;
+
+    constructor(message: string, params: {
+        status: number;
+        statusText: string;
+        responseBody: string;
+        operation: string;
+        folderPath?: string;
+        teamId?: string;
+        channelId?: string;
+        channelDisplayName?: string;
+        correlationId?: string;
+    }) {
+        super(message);
+        this.name = 'GraphOperationError';
+        this.status = params.status;
+        this.statusText = params.statusText;
+        this.responseBody = params.responseBody;
+        this.operation = params.operation;
+        this.folderPath = params.folderPath;
+        this.teamId = params.teamId;
+        this.channelId = params.channelId;
+        this.channelDisplayName = params.channelDisplayName;
+        this.correlationId = params.correlationId;
+    }
+}
+
+const safeReadResponseText = async (response: Response): Promise<string> => {
+    try {
+        return await response.text();
+    } catch {
+        return '';
+    }
+};
+
+const toGraphOperationError = async (
+    response: Response,
+    context: GraphOperationContext,
+    fallbackMessage: string
+): Promise<GraphOperationError> => {
+    const responseBody = await safeReadResponseText(response);
+    const message = `${fallbackMessage}: ${response.status} ${response.statusText}`;
+    return new GraphOperationError(message, {
+        status: response.status,
+        statusText: response.statusText,
+        responseBody,
+        operation: context.operation,
+        folderPath: context.folderPath,
+        teamId: context.teamId,
+        channelId: context.channelId,
+        channelDisplayName: context.channelDisplayName,
+        correlationId: context.correlationId,
+    });
+};
+
+export const isGraphOperationError = (err: unknown): err is GraphOperationError => {
+    return err instanceof GraphOperationError;
+};
+
 export const isImageFile = (file: File): boolean => file.type.startsWith('image/');
 
 export const isPdfFile = (file: File): boolean => file.type === 'application/pdf';
@@ -101,14 +178,41 @@ export const getFolderPath = (channelDisplayName: string): string => {
 };
 
 // Hilfsfunktionen außerhalb der Komponente definieren
-export const checkFolderExists = async (accessToken: string, siteId: string, folderPath: string): Promise<boolean> => {
+export const checkFolderExists = async (
+    accessToken: string,
+    siteId: string,
+    folderPath: string,
+    context: Omit<GraphOperationContext, 'operation' | 'folderPath'> = {}
+): Promise<boolean> => {
     const checkResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${folderPath}`, {
         headers: { Authorization: `Bearer ${accessToken}` },
     });
-    return checkResponse.ok;
+
+    if (checkResponse.ok) {
+        return true;
+    }
+
+    if (checkResponse.status === 404) {
+        return false;
+    }
+
+    throw await toGraphOperationError(
+        checkResponse,
+        {
+            operation: 'checkFolderExists',
+            folderPath,
+            ...context,
+        },
+        `Failed to check folder existence for ${folderPath}`
+    );
 };
 
-export const createFolder = async (accessToken: string, siteId: string, folderPath: string): Promise<void> => {
+export const createFolder = async (
+    accessToken: string,
+    siteId: string,
+    folderPath: string,
+    context: Omit<GraphOperationContext, 'operation' | 'folderPath'> = {}
+): Promise<void> => {
     const parentPath = folderPath.substring(0, folderPath.lastIndexOf('/'));  // z.B. "Shared Documents/General"
     const folderName = folderPath.split('/').pop()!;  // z.B. "Bilder
     
@@ -121,16 +225,36 @@ export const createFolder = async (accessToken: string, siteId: string, folderPa
         body: JSON.stringify({
             name: folderName,
             folder: {},
-            "@microsoft.graph.conflictBehavior": "rename",
         }),
     });
-    
-    if (!createResponse.ok) {
-        throw new Error(`Failed to create ${folderName} folder`);
+
+    if (createResponse.ok) {
+        return;
     }
+
+    if (createResponse.status === 409) {
+        console.warn(`[${context.correlationId || 'no-correlation'}] Folder already exists during createFolder: ${folderPath}`);
+        return;
+    }
+    
+    throw await toGraphOperationError(
+        createResponse,
+        {
+            operation: 'createFolder',
+            folderPath,
+            ...context,
+        },
+        `Failed to create ${folderName} folder`
+    );
 };
 
-export const uploadLargeFile = async (accessToken: string, siteId: string, file: File, folderPath: string): Promise<string> => {
+export const uploadLargeFile = async (
+    accessToken: string,
+    siteId: string,
+    file: File,
+    folderPath: string,
+    context: Omit<GraphOperationContext, 'operation' | 'folderPath'> = {}
+): Promise<string> => {
     const filePath = `${folderPath}/${file.name}`;
     
     // Erstelle Upload-Session
@@ -143,7 +267,15 @@ export const uploadLargeFile = async (accessToken: string, siteId: string, file:
     });
     
     if (!sessionResponse.ok) {
-        throw new Error(`Failed to create upload session for ${file.name}`);
+        throw await toGraphOperationError(
+            sessionResponse,
+            {
+                operation: 'createUploadSession',
+                folderPath,
+                ...context,
+            },
+            `Failed to create upload session for ${file.name}`
+        );
     }
     
     const sessionData = await sessionResponse.json();
@@ -167,7 +299,15 @@ export const uploadLargeFile = async (accessToken: string, siteId: string, file:
         });
         
         if (!uploadResponse.ok) {
-            throw new Error(`Failed to upload chunk for ${file.name}`);
+            throw await toGraphOperationError(
+                uploadResponse,
+                {
+                    operation: 'uploadLargeFileChunk',
+                    folderPath,
+                    ...context,
+                },
+                `Failed to upload chunk for ${file.name}`
+            );
         }
         
         uploadedBytes += chunk.size;
@@ -177,11 +317,30 @@ export const uploadLargeFile = async (accessToken: string, siteId: string, file:
     const finalResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${filePath}`, {
         headers: { Authorization: `Bearer ${accessToken}` },
     });
+
+    if (!finalResponse.ok) {
+        throw await toGraphOperationError(
+            finalResponse,
+            {
+                operation: 'getUploadedFileMetadata',
+                folderPath,
+                ...context,
+            },
+            `Failed to retrieve uploaded file metadata for ${file.name}`
+        );
+    }
+
     const finalData = await finalResponse.json();
     return finalData.webUrl;
 };
 
-export const uploadSmallFile = async (accessToken: string, siteId: string, file: File, folderPath: string): Promise<string> => {
+export const uploadSmallFile = async (
+    accessToken: string,
+    siteId: string,
+    file: File,
+    folderPath: string,
+    context: Omit<GraphOperationContext, 'operation' | 'folderPath'> = {}
+): Promise<string> => {
     const uploadResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${folderPath}/${file.name}:/content`, {
         method: "PUT",
         headers: {
@@ -193,13 +352,36 @@ export const uploadSmallFile = async (accessToken: string, siteId: string, file:
     
     if (!uploadResponse.ok) {
         const errorText = await uploadResponse.text();
-        throw new Error(`Failed to upload ${file.name}: ${uploadResponse.status} ${errorText}`);
+        throw new GraphOperationError(`Failed to upload ${file.name}: ${uploadResponse.status} ${uploadResponse.statusText}`, {
+            status: uploadResponse.status,
+            statusText: uploadResponse.statusText,
+            responseBody: errorText,
+            operation: 'uploadSmallFile',
+            folderPath,
+            teamId: context.teamId,
+            channelId: context.channelId,
+            channelDisplayName: context.channelDisplayName,
+            correlationId: context.correlationId,
+        });
     }
     
     // Hole die Web-URL
     const urlResponse = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${folderPath}/${file.name}`, {
         headers: { Authorization: `Bearer ${accessToken}` },
     });
+
+    if (!urlResponse.ok) {
+        throw await toGraphOperationError(
+            urlResponse,
+            {
+                operation: 'getUploadedFileMetadata',
+                folderPath,
+                ...context,
+            },
+            `Failed to retrieve uploaded file metadata for ${file.name}`
+        );
+    }
+
     const urlData = await urlResponse.json();
     return urlData.webUrl;
 };
@@ -420,6 +602,9 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
 
         setUploading(true);
         setError(null);
+        const correlationId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+            ? crypto.randomUUID()
+            : `cid-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
         const request = { ...loginRequest, account };
 
@@ -443,16 +628,26 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
                 folderPath = `${folderPath}/${selectedSubFolder}`;
             }
             
-            console.log('Verwende Ordner-Pfad:', folderPath);
+            console.log(`[${correlationId}] Verwende Ordner-Pfad:`, folderPath);
 
             // Schritt 3: Überprüfe und erstelle den Ordner
             // Note: If subfolder is selected, we assume it exists (as per requirement), 
             // but checkFolderExists/createFolder handles the recursive creation if needed or we can rely on it existing.
             // The current createFolder implementation might fail if parent doesn't exist, 
             // but since "Bilder" is parent and we check it, it should be fine.
-            const folderExists = await checkFolderExists(accessToken, siteId, folderPath);
+            const folderExists = await checkFolderExists(accessToken, siteId, folderPath, {
+                correlationId,
+                teamId: team.id,
+                channelId: channel.id,
+                channelDisplayName: channel.displayName,
+            });
             if (!folderExists) {
-                await createFolder(accessToken, siteId, folderPath);
+                await createFolder(accessToken, siteId, folderPath, {
+                    correlationId,
+                    teamId: team.id,
+                    channelId: channel.id,
+                    channelDisplayName: channel.displayName,
+                });
             }
 
             // Schritt 4: Lade Bilder hoch
@@ -460,9 +655,19 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
             for (const file of selectedFiles) {
                 let url: string;
                 if (file.size > 4 * 1024 * 1024) {
-                    url = await uploadLargeFile(accessToken, siteId, file, folderPath);
+                    url = await uploadLargeFile(accessToken, siteId, file, folderPath, {
+                        correlationId,
+                        teamId: team.id,
+                        channelId: channel.id,
+                        channelDisplayName: channel.displayName,
+                    });
                 } else {
-                    url = await uploadSmallFile(accessToken, siteId, file, folderPath);
+                    url = await uploadSmallFile(accessToken, siteId, file, folderPath, {
+                        correlationId,
+                        teamId: team.id,
+                        channelId: channel.id,
+                        channelDisplayName: channel.displayName,
+                    });
                 }
                 imageUrls.push(url);
             }
@@ -473,14 +678,21 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
                 await logToSharePoint(accessToken, {
                     userEmail: account.username,
                     // NEW: Log the specific subfolder in sourceUrl
-                    sourceUrl: `Team: ${team.displayName} / Channel: ${channel.displayName} / Folder: ${selectedSubFolder || "Root"}`,
+                    sourceUrl: window.location.href,
                     photoCount: selectedFiles.length,
                     totalSizeMB: parseFloat(totalSizeMB.toFixed(2)),
                     targetTeamName: team.displayName,
-                    status: 'Success'
+                    status: 'Success',
+                    correlationId,
+                    step: 'directUpload',
+                    teamId: team.id,
+                    channelId: channel.id,
+                    channelDisplayName: channel.displayName,
+                    folderPath,
+                    operation: 'uploadImages',
                 });
             } catch (logErr) {
-                console.error("Logging failed but upload was successful", logErr);
+                console.error(`[${correlationId}] Logging failed but upload was successful`, logErr);
             }
 
             // Schritt 5: Encodiere alle Bilder
@@ -503,6 +715,20 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
                 // Optional: handle interaction required (e.g., trigger login)
             } else {
                 const msg = err instanceof Error ? err.message : t('upload.uploadFailed');
+                if (isGraphOperationError(err)) {
+                    console.error(`[${correlationId}] Upload Graph-Fehler`, {
+                        operation: err.operation,
+                        status: err.status,
+                        statusText: err.statusText,
+                        responseBody: err.responseBody,
+                        teamId: err.teamId,
+                        channelId: err.channelId,
+                        channelDisplayName: err.channelDisplayName,
+                        folderPath: err.folderPath,
+                    });
+                } else {
+                    console.error(`[${correlationId}] Upload-Fehler`, err);
+                }
                 setError(msg);
                 setSnackbarMessage(msg);
                 setSnackbarSeverity('error');

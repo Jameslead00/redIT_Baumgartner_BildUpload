@@ -601,7 +601,8 @@ describe("TeamsList component", () => {
         '',
         ['https://uploaded-pdf-url'],
         [expect.objectContaining({ name: 'manual.pdf', type: 'application/pdf' })],
-        []
+        [],
+        expect.objectContaining({ correlationId: expect.any(String) })
       );
     }, { timeout: 3000 });
   });
@@ -661,7 +662,8 @@ describe("TeamsList component", () => {
         '',
         ['https://uploaded-video-url'],
         [expect.objectContaining({ name: 'clip.mp4', type: 'video/mp4' })],
-        []
+        [],
+        expect.objectContaining({ correlationId: expect.any(String) })
       );
     }, { timeout: 3000 });
   });
@@ -774,10 +776,247 @@ describe("TeamsList component", () => {
         'Offline Post',
         ['https://uploaded-offline-url'],
         [expect.objectContaining({ name: 'offline.png', type: 'image/png' })],
-        [{ id: 'u1', displayName: 'Alice' }]
+        [{ id: 'u1', displayName: 'Alice' }],
+        expect.objectContaining({ correlationId: expect.any(String) })
       );
       expect(dbModule.db.posts.delete).toHaveBeenCalledWith(7);
     });
+  });
+
+  test('syncOfflinePosts creates missing Bilder folder before uploading cached files', async () => {
+    const dbModule = require('../db');
+    jest.clearAllMocks();
+
+    const cachedPosts = [{
+      id: 8,
+      teamId: 't1',
+      channelId: 'c1',
+      channelDisplayName: 'General',
+      text: 'Offline with missing folder',
+      imageUrls: [] as string[],
+      timestamp: Date.now(),
+      mentions: [],
+      subFolder: ''
+    }];
+
+    dbModule.db.posts.toArray.mockResolvedValue(cachedPosts);
+    dbModule.db.images.where.mockReturnValue({
+      equals: jest.fn(() => ({
+        toArray: jest.fn().mockResolvedValue([{ file: new File(['a'], 'missing-folder.png', { type: 'image/png' }) }]),
+        delete: jest.fn().mockResolvedValue(undefined),
+      }))
+    });
+
+    (msal.useMsal as jest.Mock).mockReturnValue({
+      instance: { acquireTokenSilent: jest.fn().mockResolvedValue({ accessToken: 'mock-token' }) },
+      accounts: [{}]
+    });
+    (msal.useAccount as jest.Mock).mockReturnValue({ name: 'User', username: 'u@test' });
+
+    (global as any).fetch = jest.fn().mockImplementation((input: RequestInfo, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : (input as any).url;
+      const method = init?.method || 'GET';
+
+      if (url.includes('/me/joinedTeams')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: teams }) });
+      if (url.includes('/teams/t1/members')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }) });
+      if (url.includes('/teams/t1/channels')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [{ id: 'c1', displayName: 'General' }] }) });
+      if (url.includes('/groups/t1/sites/root')) return Promise.resolve({ ok: true, json: async (): Promise<{ id: string }> => ({ id: 'siteId' }) });
+
+      // Folder check for General/Bilder -> missing
+      if (url.includes('/drive/root:/General/Bilder') && method === 'GET' && !url.includes('missing-folder.png')) {
+        return Promise.resolve({ ok: false, status: 404, statusText: 'Not Found', text: async () => '' });
+      }
+
+      // Folder create
+      if (url.includes('/drive/root:/General:/children') && method === 'POST') {
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }
+
+      // File upload + metadata read
+      if (url.includes('/drive/root:/General/Bilder/missing-folder.png:/content') && method === 'PUT') {
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }
+      if (url.includes('/drive/root:/General/Bilder/missing-folder.png') && method === 'GET') {
+        return Promise.resolve({ ok: true, json: async () => ({ webUrl: 'https://uploaded-missing-folder-url' }) });
+      }
+
+      if (url.includes('/lists/') && method === 'POST') {
+        return Promise.resolve({ ok: true, text: async () => '' });
+      }
+
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }), text: async () => '' });
+    });
+
+    (postMessageToChannel as jest.Mock).mockResolvedValue(undefined);
+
+    render(<TeamsList />);
+
+    await waitFor(() => {
+      expect((global as any).fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/drive/root:/General:/children'),
+        expect.objectContaining({ method: 'POST' })
+      );
+      expect((global as any).fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/drive/root:/General/Bilder/missing-folder.png:/content'),
+        expect.objectContaining({ method: 'PUT' })
+      );
+      expect(postMessageToChannel).toHaveBeenCalledWith(
+        'mock-token',
+        't1',
+        'c1',
+        'Offline with missing folder',
+        ['https://uploaded-missing-folder-url'],
+        [expect.objectContaining({ name: 'missing-folder.png', type: 'image/png' })],
+        [],
+        expect.objectContaining({ correlationId: expect.any(String) })
+      );
+      expect(dbModule.db.posts.delete).toHaveBeenCalledWith(8);
+    });
+  });
+
+  test('syncOfflinePosts tolerates 409 on folder create and still uploads/posts', async () => {
+    const dbModule = require('../db');
+    jest.clearAllMocks();
+
+    const cachedPosts = [{
+      id: 9,
+      teamId: 't1',
+      channelId: 'c1',
+      channelDisplayName: 'General',
+      text: 'Offline conflict',
+      imageUrls: [] as string[],
+      timestamp: Date.now(),
+      mentions: [],
+      subFolder: ''
+    }];
+
+    dbModule.db.posts.toArray.mockResolvedValue(cachedPosts);
+    dbModule.db.images.where.mockReturnValue({
+      equals: jest.fn(() => ({
+        toArray: jest.fn().mockResolvedValue([{ file: new File(['a'], 'conflict.png', { type: 'image/png' }) }]),
+        delete: jest.fn().mockResolvedValue(undefined),
+      }))
+    });
+
+    (msal.useMsal as jest.Mock).mockReturnValue({
+      instance: { acquireTokenSilent: jest.fn().mockResolvedValue({ accessToken: 'mock-token' }) },
+      accounts: [{}]
+    });
+    (msal.useAccount as jest.Mock).mockReturnValue({ name: 'User', username: 'u@test' });
+
+    (global as any).fetch = jest.fn().mockImplementation((input: RequestInfo, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : (input as any).url;
+      const method = init?.method || 'GET';
+
+      if (url.includes('/me/joinedTeams')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: teams }) });
+      if (url.includes('/teams/t1/members')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }) });
+      if (url.includes('/teams/t1/channels')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [{ id: 'c1', displayName: 'General' }] }) });
+      if (url.includes('/groups/t1/sites/root')) return Promise.resolve({ ok: true, json: async (): Promise<{ id: string }> => ({ id: 'siteId' }) });
+
+      if (url.includes('/drive/root:/General/Bilder') && method === 'GET' && !url.includes('conflict.png')) {
+        return Promise.resolve({ ok: false, status: 404, statusText: 'Not Found', text: async () => '' });
+      }
+
+      // Folder already created by another client in parallel
+      if (url.includes('/drive/root:/General:/children') && method === 'POST') {
+        return Promise.resolve({ ok: false, status: 409, statusText: 'Conflict', text: async () => 'already exists' });
+      }
+
+      if (url.includes('/drive/root:/General/Bilder/conflict.png:/content') && method === 'PUT') {
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }
+      if (url.includes('/drive/root:/General/Bilder/conflict.png') && method === 'GET') {
+        return Promise.resolve({ ok: true, json: async () => ({ webUrl: 'https://uploaded-conflict-url' }) });
+      }
+
+      if (url.includes('/lists/') && method === 'POST') {
+        return Promise.resolve({ ok: true, text: async () => '' });
+      }
+
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }), text: async () => '' });
+    });
+
+    (postMessageToChannel as jest.Mock).mockResolvedValue(undefined);
+
+    render(<TeamsList />);
+
+    await waitFor(() => {
+      expect(postMessageToChannel).toHaveBeenCalledWith(
+        'mock-token',
+        't1',
+        'c1',
+        'Offline conflict',
+        ['https://uploaded-conflict-url'],
+        [expect.objectContaining({ name: 'conflict.png', type: 'image/png' })],
+        [],
+        expect.objectContaining({ correlationId: expect.any(String) })
+      );
+      expect(dbModule.db.posts.delete).toHaveBeenCalledWith(9);
+    });
+  });
+
+  test('syncOfflinePosts does not delete cached post when replay fails', async () => {
+    const dbModule = require('../db');
+    jest.clearAllMocks();
+
+    const imageDeleteSpy = jest.fn().mockResolvedValue(undefined);
+    dbModule.db.posts.toArray.mockResolvedValue([
+      {
+        id: 10,
+        teamId: 't1',
+        channelId: 'c1',
+        channelDisplayName: 'General',
+        text: 'Offline fail',
+        imageUrls: [],
+        timestamp: Date.now(),
+        mentions: [],
+        subFolder: ''
+      }
+    ]);
+    dbModule.db.images.where.mockReturnValue({
+      equals: jest.fn(() => ({
+        toArray: jest.fn().mockResolvedValue([{ file: new File(['a'], 'fail.png', { type: 'image/png' }) }]),
+        delete: imageDeleteSpy,
+      }))
+    });
+
+    (msal.useMsal as jest.Mock).mockReturnValue({
+      instance: { acquireTokenSilent: jest.fn().mockResolvedValue({ accessToken: 'mock-token' }) },
+      accounts: [{}]
+    });
+    (msal.useAccount as jest.Mock).mockReturnValue({ name: 'User', username: 'u@test' });
+
+    (global as any).fetch = jest.fn().mockImplementation((input: RequestInfo, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : (input as any).url;
+      const method = init?.method || 'GET';
+
+      if (url.includes('/me/joinedTeams')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: teams }) });
+      if (url.includes('/teams/t1/members')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }) });
+      if (url.includes('/teams/t1/channels')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [{ id: 'c1', displayName: 'General' }] }) });
+      if (url.includes('/groups/t1/sites/root')) return Promise.resolve({ ok: true, json: async (): Promise<{ id: string }> => ({ id: 'siteId' }) });
+
+      // Fail folder check with forbidden to trigger syncOfflinePosts catch path
+      if (url.includes('/drive/root:/General/Bilder') && method === 'GET' && !url.includes('fail.png')) {
+        return Promise.resolve({ ok: false, status: 403, statusText: 'Forbidden', text: async () => 'forbidden' });
+      }
+
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }), text: async () => '' });
+    });
+
+    (postMessageToChannel as jest.Mock).mockResolvedValue(undefined);
+
+    render(<TeamsList />);
+
+    await waitFor(() => {
+      expect((global as any).fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/groups/t1/sites/root'),
+        expect.any(Object)
+      );
+    });
+
+    expect(postMessageToChannel).not.toHaveBeenCalled();
+    expect(dbModule.db.posts.delete).not.toHaveBeenCalledWith(10);
+    expect(imageDeleteSpy).not.toHaveBeenCalled();
   });
 
   test('saveOfflinePost uploads and posts directly when online (single post, no duplicate)', async () => {
@@ -839,4 +1078,217 @@ describe("TeamsList component", () => {
         expect(dbModule.db.posts.delete).toHaveBeenCalledWith(99);
     }, { timeout: 3000 });
   });
+
+  test('syncPost writes Error AppLog and rethrows when folder check fails', async () => {
+    const dbModule = require('../db');
+    jest.clearAllMocks();
+
+    dbModule.db.posts.toArray.mockResolvedValue([]);
+    dbModule.db.posts.add.mockResolvedValue(888);
+    dbModule.db.images.where.mockReturnValue({
+      equals: jest.fn(() => ({
+        toArray: jest.fn().mockResolvedValue([{ file: new File(['a'], 'a.png', { type: 'image/png' }) }]),
+        delete: jest.fn().mockResolvedValue(undefined),
+      }))
+    });
+
+    (msal.useMsal as jest.Mock).mockReturnValue({
+      instance: { acquireTokenSilent: jest.fn().mockResolvedValue({ accessToken: 'mock-token' }) },
+      accounts: [{}]
+    });
+    (msal.useAccount as jest.Mock).mockReturnValue({ name: 'User', username: 'u@test' });
+
+    (global as any).fetch = jest.fn().mockImplementation((input: RequestInfo, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : (input as any).url;
+      if (url.includes('/me/joinedTeams')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: teams }) });
+      if (url.includes('/teams/t1/members')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }) });
+      if (url.includes('/teams/t1/channels')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [{ id: 'c1', displayName: 'General' }] }) });
+      if (url.includes('/groups/t1/sites/root')) return Promise.resolve({ ok: true, json: async (): Promise<{ id: string }> => ({ id: 'siteId' }) });
+
+      // folder check fails with 403 -> should trigger catch path and error AppLog
+      if (url.includes('/drive/root:/General/Bilder') && !url.includes('/content')) {
+        return Promise.resolve({ ok: false, status: 403, statusText: 'Forbidden', text: async () => 'forbidden' });
+      }
+
+      // AppLog write
+      if (url.includes('/lists/') && init?.method === 'POST') {
+        return Promise.resolve({ ok: true, text: async () => '' });
+      }
+
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }), text: async () => '' });
+    });
+
+    (postMessageToChannel as jest.Mock).mockResolvedValue(undefined);
+
+    render(<TeamsList />);
+
+    const input = await screen.findByLabelText(/Teams suchen/i);
+    await userEvent.click(input);
+    await userEvent.type(input, 'Team One');
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+
+    let props = (global as any).__lastChannelsListProps;
+    await act(async () => {
+      props.onChannelSelect({ id: 'c1', displayName: 'General' });
+    });
+    await new Promise((r) => setTimeout(r, 0));
+
+    props = (global as any).__lastChannelsListProps;
+    await expect(
+      props.onSaveOffline([new File(['a'], 'a.png', { type: 'image/png' })], '')
+    ).rejects.toThrow(/Failed to check folder existence/);
+
+    const logCalls = ((global as any).fetch as jest.Mock).mock.calls.filter((call: any[]) => {
+      const url = call[0] as string;
+      return typeof url === 'string' && url.includes('/lists/');
+    });
+
+    expect(logCalls.length).toBeGreaterThanOrEqual(1);
+    const logBody = JSON.parse(logCalls[0][1].body);
+    expect(logBody.fields.Status).toBe('Error');
+    expect(logBody.fields.ErrorMessage).toContain('step=checkFolder');
+    expect(logBody.fields.ErrorMessage).toContain('httpStatus=403');
+    expect(logBody.fields.ErrorMessage).toContain('correlationId=');
+    expect(postMessageToChannel).not.toHaveBeenCalled();
+    expect(dbModule.db.posts.delete).not.toHaveBeenCalledWith(888);
+  });
+
+  test('syncPost logs AppLog-write failure separately and still rethrows original error', async () => {
+    const dbModule = require('../db');
+    jest.clearAllMocks();
+
+    dbModule.db.posts.toArray.mockResolvedValue([]);
+    dbModule.db.posts.add.mockResolvedValue(889);
+    dbModule.db.images.where.mockReturnValue({
+      equals: jest.fn(() => ({
+        toArray: jest.fn().mockResolvedValue([{ file: new File(['a'], 'a.png', { type: 'image/png' }) }]),
+        delete: jest.fn().mockResolvedValue(undefined),
+      }))
+    });
+
+    (msal.useMsal as jest.Mock).mockReturnValue({
+      instance: { acquireTokenSilent: jest.fn().mockResolvedValue({ accessToken: 'mock-token' }) },
+      accounts: [{}]
+    });
+    (msal.useAccount as jest.Mock).mockReturnValue({ name: 'User', username: 'u@test' });
+
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    (global as any).fetch = jest.fn().mockImplementation((input: RequestInfo, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : (input as any).url;
+      if (url.includes('/me/joinedTeams')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: teams }) });
+      if (url.includes('/teams/t1/members')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }) });
+      if (url.includes('/teams/t1/channels')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [{ id: 'c1', displayName: 'General' }] }) });
+      if (url.includes('/groups/t1/sites/root')) return Promise.resolve({ ok: true, json: async (): Promise<{ id: string }> => ({ id: 'siteId' }) });
+      if (url.includes('/drive/root:/General/Bilder') && !url.includes('/content')) {
+        return Promise.resolve({ ok: false, status: 403, statusText: 'Forbidden', text: async () => 'forbidden' });
+      }
+
+      // AppLog write itself fails
+      if (url.includes('/lists/') && init?.method === 'POST') {
+        return Promise.resolve({ ok: false, status: 403, text: async () => 'log-forbidden' });
+      }
+
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }), text: async () => '' });
+    });
+
+    (postMessageToChannel as jest.Mock).mockResolvedValue(undefined);
+
+    render(<TeamsList />);
+
+    const input = await screen.findByLabelText(/Teams suchen/i);
+    await userEvent.click(input);
+    await userEvent.type(input, 'Team One');
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+
+    let props = (global as any).__lastChannelsListProps;
+    await act(async () => {
+      props.onChannelSelect({ id: 'c1', displayName: 'General' });
+    });
+    await new Promise((r) => setTimeout(r, 0));
+
+    props = (global as any).__lastChannelsListProps;
+    await expect(
+      props.onSaveOffline([new File(['a'], 'a.png', { type: 'image/png' })], '')
+    ).rejects.toThrow(/Failed to check folder existence/);
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/AppLog Error-Write fehlgeschlagen/),
+      expect.anything(),
+      expect.anything()
+    );
+
+  });
+
+  test('syncPost writes success AppLog after postMessageToChannel', async () => {
+    const dbModule = require('../db');
+    jest.clearAllMocks();
+
+    dbModule.db.posts.toArray.mockResolvedValue([]);
+    dbModule.db.posts.add.mockResolvedValue(890);
+    dbModule.db.images.where.mockReturnValue({
+      equals: jest.fn(() => ({
+        toArray: jest.fn().mockResolvedValue([{ file: new File(['a'], 'a.png', { type: 'image/png' }) }]),
+        delete: jest.fn().mockResolvedValue(undefined),
+      }))
+    });
+
+    (msal.useMsal as jest.Mock).mockReturnValue({
+      instance: { acquireTokenSilent: jest.fn().mockResolvedValue({ accessToken: 'mock-token' }) },
+      accounts: [{}]
+    });
+    (msal.useAccount as jest.Mock).mockReturnValue({ name: 'User', username: 'u@test' });
+
+    const events: string[] = [];
+    (postMessageToChannel as jest.Mock).mockImplementation(async () => {
+      events.push('postMessage');
+    });
+
+    (global as any).fetch = jest.fn().mockImplementation((input: RequestInfo, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : (input as any).url;
+      const method = init?.method || 'GET';
+
+      if (url.includes('/me/joinedTeams')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: teams }) });
+      if (url.includes('/teams/t1/members')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }) });
+      if (url.includes('/teams/t1/channels')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [{ id: 'c1', displayName: 'General' }] }) });
+      if (url.includes('/groups/t1/sites/root')) return Promise.resolve({ ok: true, json: async (): Promise<{ id: string }> => ({ id: 'siteId' }) });
+      if (url.includes('/drive/root:/General/Bilder/a.png:/content') && method === 'PUT') {
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }
+      if (url.includes('/drive/root:/General/Bilder/a.png') && method === 'GET') {
+        return Promise.resolve({ ok: true, json: async () => ({ webUrl: 'https://uploaded-url' }) });
+      }
+      if (url.includes('/drive/root:/General/Bilder') && method === 'GET') {
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }
+      if (url.includes('/lists/') && method === 'POST') {
+        events.push('successLog');
+        return Promise.resolve({ ok: true, text: async () => '' });
+      }
+
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }), text: async () => '' });
+    });
+
+    render(<TeamsList />);
+
+    const input = await screen.findByLabelText(/Teams suchen/i);
+    await userEvent.click(input);
+    await userEvent.type(input, 'Team One');
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+
+    let props = (global as any).__lastChannelsListProps;
+    await act(async () => {
+      props.onChannelSelect({ id: 'c1', displayName: 'General' });
+    });
+    await new Promise((r) => setTimeout(r, 0));
+
+    props = (global as any).__lastChannelsListProps;
+    await act(async () => {
+      await props.onSaveOffline([new File(['a'], 'a.png', { type: 'image/png' })], '');
+    });
+
+    expect(events.indexOf('postMessage')).toBeGreaterThanOrEqual(0);
+    expect(events.indexOf('successLog')).toBeGreaterThan(events.indexOf('postMessage'));
+  });
+
 });

@@ -16,10 +16,15 @@ describe('ImageUpload helpers', () => {
     expect(res).toBe(true);
   });
 
-  test('checkFolderExists returns false when not ok', async () => {
-    (global as any).fetch = jest.fn().mockResolvedValue({ ok: false });
+  test('checkFolderExists returns false when 404', async () => {
+    (global as any).fetch = jest.fn().mockResolvedValue({ ok: false, status: 404, statusText: 'Not Found', text: async () => '' });
     const res = await checkFolderExists('token', 'site', 'General/Bilder');
     expect(res).toBe(false);
+  });
+
+  test('checkFolderExists throws when non-404 error is returned', async () => {
+    (global as any).fetch = jest.fn().mockResolvedValue({ ok: false, status: 403, statusText: 'Forbidden', text: async () => 'forbidden' });
+    await expect(checkFolderExists('token', 'site', 'General/Bilder')).rejects.toThrow(/Failed to check folder existence/);
   });
 
   test('createFolder posts to graph and resolves', async () => {
@@ -30,6 +35,11 @@ describe('ImageUpload helpers', () => {
   test('createFolder throws if not ok', async () => {
     (global as any).fetch = jest.fn().mockResolvedValue({ ok: false });
     await expect(createFolder('t', 'site', 'General/Bilder')).rejects.toThrow(/Failed to create/);
+  });
+
+  test('createFolder resolves when API returns 409 conflict (already exists)', async () => {
+    (global as any).fetch = jest.fn().mockResolvedValue({ ok: false, status: 409, statusText: 'Conflict', text: async () => 'already exists' });
+    await expect(createFolder('t', 'site', 'General/Bilder')).resolves.toBeUndefined();
   });
 
   test('uploadSmallFile returns webUrl on success', async () => {
