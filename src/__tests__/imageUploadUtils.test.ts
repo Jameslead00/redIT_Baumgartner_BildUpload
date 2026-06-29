@@ -15,14 +15,19 @@ describe('ImageUpload utils', () => {
     expect(getFolderPath('Marketing Kanal')).toBe('Marketing Kanal/Bilder');
   });
 
-  test('checkFolderExists returns based on fetch.ok', async () => {
+  test('checkFolderExists returns true and false only for 404', async () => {
     (global as any).fetch.mockResolvedValueOnce({ ok: true });
     const okRes = await checkFolderExists('token', 'siteid', 'General/Bilder');
     expect(okRes).toBe(true);
 
-    (global as any).fetch.mockResolvedValueOnce({ ok: false });
+    (global as any).fetch.mockResolvedValueOnce({ ok: false, status: 404, statusText: 'Not Found', text: () => Promise.resolve('') });
     const nokRes = await checkFolderExists('token', 'siteid', 'General/Bilder');
     expect(nokRes).toBe(false);
+  });
+
+  test('checkFolderExists throws for non-404 errors', async () => {
+    (global as any).fetch.mockResolvedValueOnce({ ok: false, status: 500, statusText: 'Server Error', text: () => Promise.resolve('boom') });
+    await expect(checkFolderExists('token', 'siteid', 'General/Bilder')).rejects.toThrow(/Failed to check folder existence/);
   });
 
   test('createFolder POSTs to the parent path and resolves on ok', async () => {

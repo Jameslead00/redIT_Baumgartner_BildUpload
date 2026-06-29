@@ -228,8 +228,10 @@ export const postMessageToChannel = async (
     customText: string,
     imageUrls?: string[],
     files?: File[],
-    mentions: MentionUser[] = [] 
+    mentions: MentionUser[] = [],
+    options?: { correlationId?: string }
 ): Promise<void> => {
+    const correlationId = options?.correlationId || 'no-correlation';
     const validMentions = mentions.filter(u => u.id && u.displayName);
 
     const mentionEntities = validMentions.map((user, index) => ({
@@ -307,6 +309,6 @@ export const postMessageToChannel = async (
     
     if (!messageResponse.ok) {
         const responseText = await messageResponse.text();
-        throw new Error(`Failed to post message to channel: ${messageResponse.status} ${responseText}`);
+        throw new Error(`[${correlationId}] Failed to post message to channel: ${messageResponse.status} ${responseText}`);
     }
 };
