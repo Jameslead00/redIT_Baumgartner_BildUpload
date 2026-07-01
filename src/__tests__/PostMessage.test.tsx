@@ -84,6 +84,21 @@ describe('postMessageToChannel', () => {
     expect(body.body.content).toContain('Hello');
   });
 
+  test('renders mention with position in brackets when position is available', async () => {
+    const mockFetch = jest.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    (global as any).fetch = mockFetch;
+
+    const mentions = [{ id: 'u2', displayName: 'Anna Muster', position: 'Montage Koordination' }];
+
+    await postMessageToChannel('token123', 'team1', 'chan1', 'Hi', [], [], mentions as any);
+
+    const options = mockFetch.mock.calls[0][1];
+    const body = JSON.parse(options.body);
+
+    expect(body.body.content).toContain('Anna Muster (Montage Koordination)');
+    expect(body.mentions[0].mentioned.user.displayName).toBe('Anna Muster');
+  });
+
   test('sends payload with hostedContents (images) and mentions', async () => {
     // Mock fetch to collect the POST body
     (global as any).fetch = jest.fn().mockImplementation((input: RequestInfo, init?: RequestInit) => {

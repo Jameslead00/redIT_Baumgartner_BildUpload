@@ -9,7 +9,13 @@ const MAX_MESSAGE_PAYLOAD_BYTES = 3.5 * 1024 * 1024;
 export interface MentionUser {
     id: string;
     displayName: string;
+    position?: string;
 }
+
+const formatMentionDisplayName = (user: MentionUser): string => {
+    const position = user.position?.trim();
+    return position ? `${user.displayName} (${position})` : user.displayName;
+};
 
 const isImageFile = (file: File): boolean => file.type.startsWith('image/');
 
@@ -278,7 +284,7 @@ export const postMessageToChannel = async (
 
     const mentionEntities = validMentions.map((user, index) => ({
         id: index,
-        mentionText: user.displayName,
+        mentionText: formatMentionDisplayName(user),
         mentioned: {
             user: {
                 id: user.id,
@@ -288,7 +294,7 @@ export const postMessageToChannel = async (
         }
     }));
 
-    const mentionsHtml = validMentions.map((user, index) => `<at id="${index}">${escapeHtml(user.displayName)}</at>`).join(' ');
+    const mentionsHtml = validMentions.map((user, index) => `<at id="${index}">${escapeHtml(formatMentionDisplayName(user))}</at>`).join(' ');
     const fileEntries: FileEntry[] = [];
     let omittedImageCount = 0;
 
