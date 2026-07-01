@@ -51,7 +51,7 @@ const TeamsList: React.FC = () => {
 
     const getMentionDropdownLabel = (member: MentionUser): string => {
         const position = member.position?.trim() || '';
-        return `${member.displayName} (${position})`;
+        return position ? `${member.displayName} (${position})` : member.displayName;
     };
 
     const enrichMembersWithPositions = async (accessToken: string, members: MentionUser[]): Promise<MentionUser[]> => {
@@ -86,7 +86,18 @@ const TeamsList: React.FC = () => {
                 const responses = Array.isArray(batchData?.responses) ? batchData.responses : [];
 
                 for (const item of responses) {
-                    if (item?.status !== 200 || !item?.body?.id) continue;
+                    if (item?.status !== 200 || !item?.body?.id) {
+                        const errorCode = item?.body?.error?.code;
+                        const errorMessage = item?.body?.error?.message;
+                        if (item?.status === 401 || item?.status === 403 || errorCode === 'Authorization_RequestDenied') {
+                            console.warn('Positionsdaten konnten aufgrund fehlender Berechtigung nicht geladen werden.', {
+                                status: item?.status,
+                                code: errorCode,
+                                message: errorMessage,
+                            });
+                        }
+                        continue;
+                    }
                     const rawPosition = typeof item.body.jobTitle === 'string' ? item.body.jobTitle.trim() : '';
                     if (rawPosition) {
                         positionByUserId[item.body.id] = rawPosition;
@@ -558,9 +569,11 @@ const TeamsList: React.FC = () => {
                     accessToken = response.accessToken;
                 } catch (err) {
                     if (err instanceof InteractionRequiredAuthError) {
-                        return; 
+                        const popupResponse = await instance.acquireTokenPopup(request);
+                        accessToken = popupResponse.accessToken;
+                    } else {
+                        throw err;
                     }
-                    throw err;
                 }
                 
                 const res = await fetch(`https://graph.microsoft.com/v1.0/teams/${selectedTeam.id}/members`, {
