@@ -84,7 +84,7 @@ describe('postMessageToChannel', () => {
     expect(body.body.content).toContain('Hello');
   });
 
-  test('renders mention with position in brackets when position is available', async () => {
+  test('does not render position in mention text when posting', async () => {
     const mockFetch = jest.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
     (global as any).fetch = mockFetch;
 
@@ -95,7 +95,8 @@ describe('postMessageToChannel', () => {
     const options = mockFetch.mock.calls[0][1];
     const body = JSON.parse(options.body);
 
-    expect(body.body.content).toContain('Anna Muster (Montage Koordination)');
+    expect(body.body.content).toContain('Anna Muster');
+    expect(body.body.content).not.toContain('Montage Koordination');
     expect(body.mentions[0].mentioned.user.displayName).toBe('Anna Muster');
   });
 

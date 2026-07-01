@@ -49,6 +49,11 @@ const TeamsList: React.FC = () => {
         return `cid-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     };
 
+    const getMentionDropdownLabel = (member: MentionUser): string => {
+        const position = member.position?.trim() || '';
+        return `${member.displayName} (${position})`;
+    };
+
     const enrichMembersWithPositions = async (accessToken: string, members: MentionUser[]): Promise<MentionUser[]> => {
         if (members.length === 0) return members;
 
@@ -1018,11 +1023,16 @@ const TeamsList: React.FC = () => {
                         <Autocomplete
                             multiple
                             options={teamMembers}
-                            getOptionLabel={(option) => option.position ? `${option.displayName} (${option.position})` : option.displayName}
+                            getOptionLabel={(option) => option.displayName}
                             value={selectedMentions}
                             onChange={(event, newValue) => {
                                 setSelectedMentions(newValue);
                             }}
+                            renderOption={(props, option) => (
+                                <Box component="li" {...props}>
+                                    {getMentionDropdownLabel(option)}
+                                </Box>
+                            )}
                             renderInput={(params) => (
                                 <TextField 
                                     {...params} 

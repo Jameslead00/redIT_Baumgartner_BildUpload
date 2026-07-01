@@ -12,11 +12,6 @@ export interface MentionUser {
     position?: string;
 }
 
-const formatMentionDisplayName = (user: MentionUser): string => {
-    const position = user.position?.trim();
-    return position ? `${user.displayName} (${position})` : user.displayName;
-};
-
 const isImageFile = (file: File): boolean => file.type.startsWith('image/');
 
 const VIDEO_MIME_TYPES = new Set([
@@ -284,7 +279,7 @@ export const postMessageToChannel = async (
 
     const mentionEntities = validMentions.map((user, index) => ({
         id: index,
-        mentionText: formatMentionDisplayName(user),
+        mentionText: user.displayName,
         mentioned: {
             user: {
                 id: user.id,
@@ -294,7 +289,7 @@ export const postMessageToChannel = async (
         }
     }));
 
-    const mentionsHtml = validMentions.map((user, index) => `<at id="${index}">${escapeHtml(formatMentionDisplayName(user))}</at>`).join(' ');
+    const mentionsHtml = validMentions.map((user, index) => `<at id="${index}">${escapeHtml(user.displayName)}</at>`).join(' ');
     const fileEntries: FileEntry[] = [];
     let omittedImageCount = 0;
 
