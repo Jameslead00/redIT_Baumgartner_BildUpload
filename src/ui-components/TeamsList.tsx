@@ -49,6 +49,71 @@ const TeamsList: React.FC = () => {
         return `cid-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     };
 
+    const getMentionDropdownLabel = (member: MentionUser): string => {
+        const position = member.position?.trim() || '';
+        return position ? `${member.displayName} (${position})` : member.displayName;
+    };
+
+    const enrichMembersWithPositions = async (accessToken: string, members: MentionUser[]): Promise<MentionUser[]> => {
+        if (members.length === 0) return members;
+
+        const uniqueIds = Array.from(new Set(members.map((member) => member.id).filter(Boolean)));
+        const positionByUserId: Record<string, string> = {};
+
+        for (let start = 0; start < uniqueIds.length; start += 20) {
+            const chunk = uniqueIds.slice(start, start + 20);
+            const batchRequests = chunk.map((userId, index) => ({
+                id: `${index}`,
+                method: 'GET',
+                url: `/users/${userId}?$select=id,jobTitle`,
+            }));
+
+            try {
+                const batchResponse = await fetch('https://graph.microsoft.com/v1.0/$batch', {
+                    method: 'POST',
+                    headers: {
+                        Authorization: `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ requests: batchRequests }),
+                });
+
+                if (!batchResponse.ok) {
+                    continue;
+                }
+
+                const batchData = await batchResponse.json();
+                const responses = Array.isArray(batchData?.responses) ? batchData.responses : [];
+
+                for (const item of responses) {
+                    if (item?.status !== 200 || !item?.body?.id) {
+                        const errorCode = item?.body?.error?.code;
+                        const errorMessage = item?.body?.error?.message;
+                        if (item?.status === 401 || item?.status === 403 || errorCode === 'Authorization_RequestDenied') {
+                            console.warn('Positionsdaten konnten aufgrund fehlender Berechtigung nicht geladen werden.', {
+                                status: item?.status,
+                                code: errorCode,
+                                message: errorMessage,
+                            });
+                        }
+                        continue;
+                    }
+                    const rawPosition = typeof item.body.jobTitle === 'string' ? item.body.jobTitle.trim() : '';
+                    if (rawPosition) {
+                        positionByUserId[item.body.id] = rawPosition;
+                    }
+                }
+            } catch (err) {
+                console.warn('Konnte Positionsdaten für Teammitglieder nicht laden.', err);
+            }
+        }
+
+        return members.map((member) => ({
+            ...member,
+            position: positionByUserId[member.id] || member.position,
+        }));
+    };
+
     // Online-Status überwachen
     useEffect(() => {
         const handleOnline = () => setIsOnline(true);
@@ -211,12 +276,13 @@ const TeamsList: React.FC = () => {
                             });
                             if (membersResponse.ok) {
                                 const membersData = await membersResponse.json();
-                                members = membersData.value
+                                const rawMembers = membersData.value
                                     .filter((m: any) => m.userId)
                                     .map((m: any) => ({
                                         id: m.userId,
                                         displayName: m.displayName
                                     }));
+                                members = await enrichMembersWithPositions(accessToken, rawMembers);
                                 needsUpdate = true;
                             }
                         } catch (err) {
@@ -338,12 +404,13 @@ const TeamsList: React.FC = () => {
                         });
                         if (membersResponse.ok) {
                             const membersData = await membersResponse.json();
-                            members = membersData.value
+                            const rawMembers = membersData.value
                                 .filter((m: any) => m.userId)
                                 .map((m: any) => ({
                                     id: m.userId,
                                     displayName: m.displayName
                                 }));
+                            members = await enrichMembersWithPositions(accessToken, rawMembers);
                             needsUpdate = true;
                         }
                     } catch (err) {
@@ -434,7 +501,10 @@ const TeamsList: React.FC = () => {
                         });
                         if (membersResponse.ok) {
                             const mData = await membersResponse.json();
-                            members = mData.value.filter((m:any) => m.userId).map((m:any) => ({ id: m.userId, displayName: m.displayName }));
+                            const rawMembers = mData.value
+                                .filter((m: any) => m.userId)
+                                .map((m: any) => ({ id: m.userId, displayName: m.displayName }));
+                            members = await enrichMembersWithPositions(accessToken, rawMembers);
                         }
                     } catch (e) { console.error("Failed to fetch members for fav", e); }
 
@@ -499,9 +569,11 @@ const TeamsList: React.FC = () => {
                     accessToken = response.accessToken;
                 } catch (err) {
                     if (err instanceof InteractionRequiredAuthError) {
-                        return; 
+                        const popupResponse = await instance.acquireTokenPopup(request);
+                        accessToken = popupResponse.accessToken;
+                    } else {
+                        throw err;
                     }
-                    throw err;
                 }
                 
                 const res = await fetch(`https://graph.microsoft.com/v1.0/teams/${selectedTeam.id}/members`, {
@@ -511,12 +583,13 @@ const TeamsList: React.FC = () => {
                 if (res.ok) {
                     const data = await res.json();
                     if (isMounted) {
-                        const members = data.value
+                        const rawMembers = data.value
                             .filter((m: any) => m.userId && m.displayName)
                             .map((m: any) => ({
                                 id: m.userId,
                                 displayName: m.displayName
                             }));
+                        const members = await enrichMembersWithPositions(accessToken, rawMembers);
                         
                         setTeamMembers(members);
 
@@ -968,6 +1041,11 @@ const TeamsList: React.FC = () => {
                             onChange={(event, newValue) => {
                                 setSelectedMentions(newValue);
                             }}
+                            renderOption={(props, option) => (
+                                <Box component="li" {...props}>
+                                    {getMentionDropdownLabel(option)}
+                                </Box>
+                            )}
                             renderInput={(params) => (
                                 <TextField 
                                     {...params} 

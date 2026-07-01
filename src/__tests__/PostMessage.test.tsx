@@ -84,6 +84,22 @@ describe('postMessageToChannel', () => {
     expect(body.body.content).toContain('Hello');
   });
 
+  test('does not render position in mention text when posting', async () => {
+    const mockFetch = jest.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    (global as any).fetch = mockFetch;
+
+    const mentions = [{ id: 'u2', displayName: 'Anna Muster', position: 'Montage Koordination' }];
+
+    await postMessageToChannel('token123', 'team1', 'chan1', 'Hi', [], [], mentions as any);
+
+    const options = mockFetch.mock.calls[0][1];
+    const body = JSON.parse(options.body);
+
+    expect(body.body.content).toContain('Anna Muster');
+    expect(body.body.content).not.toContain('Montage Koordination');
+    expect(body.mentions[0].mentioned.user.displayName).toBe('Anna Muster');
+  });
+
   test('sends payload with hostedContents (images) and mentions', async () => {
     // Mock fetch to collect the POST body
     (global as any).fetch = jest.fn().mockImplementation((input: RequestInfo, init?: RequestInit) => {
@@ -95,7 +111,7 @@ describe('postMessageToChannel', () => {
 
     const files = [new File(['a'], 'img1.jpg', { type: 'image/jpeg' })];
     const mentions = [{ id: 'u1', displayName: 'Alice' }];
-    const imageUrls = ['https://drive/url'];
+    const imageUrls = ['https://tenant.sharepoint.com/sites/MySite/Shared%20Documents/General/Bilder/img1.jpg'];
 
     await expect(postMessageToChannel('token', 't1', 'c1', 'Hello', imageUrls, files, mentions)).resolves.toBeUndefined();
 
@@ -112,6 +128,8 @@ describe('postMessageToChannel', () => {
     expect(body.mentions.length).toBe(1);
     expect(body.body.content).toContain('Alice');
     expect(body.body.content).toContain('src="../hostedContents/1/$value"');
+    expect(body.body.content).toContain('https://tenant.sharepoint.com/sites/MySite/Shared%20Documents/General/Bilder');
+    expect(body.body.content).not.toContain('img1.jpg');
   });
 
   test('throws on failed message POST', async () => {
@@ -407,5 +425,23 @@ describe('postMessageToChannel', () => {
     expect(body.body.content).toContain('manual.pdf');
     expect(body.body.content).toContain('https://drive/manual');
     expect(body.body.content).toContain('Es befinden sich noch 1 weitere Bilder in diesem Post');
+  });
+
+  test('deduplicates duplicate file/url pairs before payload creation', async () => {
+    const mockFetch = jest.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    (global as any).fetch = mockFetch;
+
+    const duplicateFile = new File(['img'], 'dup.jpg', { type: 'image/jpeg' });
+    const files = [duplicateFile, duplicateFile];
+    const urls = ['https://drive/dup', 'https://drive/dup'];
+
+    await postMessageToChannel('token', 't1', 'c1', 'Text', urls, files, []);
+
+    const options = mockFetch.mock.calls[0][1];
+    const body = JSON.parse(options.body);
+
+    expect(body.hostedContents).toHaveLength(1);
+    expect(body.body.content).toContain('src="../hostedContents/1/$value"');
+    expect(body.body.content).not.toContain('src="../hostedContents/2/$value"');
   });
 });

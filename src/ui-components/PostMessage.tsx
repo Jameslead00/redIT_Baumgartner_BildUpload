@@ -9,6 +9,7 @@ const MAX_MESSAGE_PAYLOAD_BYTES = 3.5 * 1024 * 1024;
 export interface MentionUser {
     id: string;
     displayName: string;
+    position?: string;
 }
 
 const isImageFile = (file: File): boolean => file.type.startsWith('image/');
@@ -47,6 +48,11 @@ interface FileEntry {
     file: File;
     oneDriveUrl: string;
     hostedContent: HostedContent | null;
+}
+
+interface UploadEntry {
+    file: File;
+    oneDriveUrl: string;
 }
 
 // Füge Interfaces für Adaptive Card-Elemente hinzu
@@ -150,6 +156,43 @@ const escapeHtml = (str: string) => {
     });
 };
 
+const toSharePointLibraryFolderUrl = (url: string): string => {
+    if (!url || url === '#') return url;
+
+    const normalized = url.split('?')[0].split('#')[0];
+    const lastSlash = normalized.lastIndexOf('/');
+    if (lastSlash <= 'https://'.length) {
+        return url;
+    }
+
+    // Hosted images should link to the containing SharePoint folder/library view
+    // instead of direct file URLs to avoid additional media-unfurl behavior.
+    return normalized.substring(0, lastSlash);
+};
+
+const dedupeUploadEntries = (entries: UploadEntry[]): UploadEntry[] => {
+    const seen = new Set<string>();
+    const unique: UploadEntry[] = [];
+
+    for (const entry of entries) {
+        const signature = [
+            entry.file.name,
+            entry.file.size,
+            entry.file.lastModified,
+            entry.oneDriveUrl,
+        ].join('|');
+
+        if (seen.has(signature)) {
+            continue;
+        }
+
+        seen.add(signature);
+        unique.push(entry);
+    }
+
+    return unique;
+};
+
 const buildMessagePayload = (
     customText: string,
     fileEntries: FileEntry[],
@@ -174,7 +217,7 @@ const buildMessagePayload = (
                 <div style="margin-bottom: 16px;">
                     <img src="../hostedContents/${id}/$value" style="max-width: 100%; width: auto; border-radius: 4px; display: block;" alt="Image ${index + 1}">
                     <div style="margin-top: 4px;">
-                        <a href="${entry.oneDriveUrl}" target="_blank" style="font-size: 12px; color: #5b5fc7; text-decoration: none;">
+                        <a href="${toSharePointLibraryFolderUrl(entry.oneDriveUrl)}" target="_blank" rel="noopener noreferrer" style="font-size: 12px; color: #5b5fc7; text-decoration: none;">
                             ${(i18n as any).t('postMessage.viewOriginal')}
                         </a>
                     </div>
@@ -185,7 +228,7 @@ const buildMessagePayload = (
         return `
             <div style="margin-bottom: 16px; padding: 12px; border: 1px solid #d1d5db; border-radius: 4px;">
                 <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">${escapeHtml(entry.file.name)}</div>
-                <a href="${displayUrl}" target="_blank" style="font-size: 12px; color: #5b5fc7; text-decoration: none;">
+                <a href="${displayUrl}" target="_blank" rel="noopener noreferrer" style="font-size: 12px; color: #5b5fc7; text-decoration: none;">
                     ${(i18n as any).t('postMessage.viewFile')}
                 </a>
             </div>`;
@@ -251,8 +294,14 @@ export const postMessageToChannel = async (
     let omittedImageCount = 0;
 
     if (files && files.length > 0) {
-        for (const [index, file] of files.entries()) {
-            const oneDriveUrl = (imageUrls && imageUrls[index]) || "#";
+        const uploads = dedupeUploadEntries(
+            files.map((file, index) => ({
+                file,
+                oneDriveUrl: (imageUrls && imageUrls[index]) || '#',
+            }))
+        );
+
+        for (const { file, oneDriveUrl } of uploads) {
 
             if (!isImageFile(file)) {
                 fileEntries.push({

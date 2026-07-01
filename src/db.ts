@@ -13,6 +13,7 @@ export interface Channel {
 export interface DBMentionUser {
     id: string;
     displayName: string;
+    position?: string;
 }
 
 export interface SubFolder {
