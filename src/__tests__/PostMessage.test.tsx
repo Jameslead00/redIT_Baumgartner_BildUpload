@@ -84,7 +84,7 @@ describe('postMessageToChannel', () => {
     expect(body.body.content).toContain('Hello');
   });
 
-  test('sends payload with hostedContents (images) and mentions', async () => {
+  test('sends image links and mentions without hostedContents', async () => {
     // Mock fetch to collect the POST body
     (global as any).fetch = jest.fn().mockImplementation((input: RequestInfo, init?: RequestInit) => {
       if (typeof input === 'string' && input.includes('/messages')) {
@@ -103,15 +103,12 @@ describe('postMessageToChannel', () => {
     expect(postCalls.length).toBe(1);
     const body = JSON.parse(postCalls[0][1]?.body);
     
-    expect(body.hostedContents).toBeDefined();
-    expect(body.hostedContents.length).toBe(1);
-    expect(body.hostedContents[0]['@microsoft.graph.temporaryId']).toBe('1');
-    expect(body.hostedContents[0].contentBytes).toBe('mockbase64content');
-    expect(body.hostedContents[0].contentType).toBe('image/jpeg');
+    expect(body.hostedContents).toEqual([]);
 
     expect(body.mentions.length).toBe(1);
     expect(body.body.content).toContain('Alice');
-    expect(body.body.content).toContain('src="../hostedContents/1/$value"');
+    expect(body.body.content).toContain('Original anzeigen');
+    expect(body.body.content).toContain('href="https://drive/url"');
   });
 
   test('throws on failed message POST', async () => {
@@ -176,71 +173,38 @@ describe('postMessageToChannel', () => {
     expect(body.body.content).toContain('Neue Dateien hochgeladen: ');
   });
 
-  test('uses fallback link "#" when imageUrls are missing for files', async () => {
+  test('renders image files as original links without hostedContents', async () => {
     const mockFetch = jest.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
     (global as any).fetch = mockFetch;
 
     const files = [new File(['a'], 'img1.jpg', { type: 'image/jpeg' })];
-    // Leeres imageUrls Array
-    await postMessageToChannel('token', 't1', 'c1', 'Text', [], files, []);
+    await postMessageToChannel('token', 't1', 'c1', 'Text', ['https://drive/img1'], files, []);
 
     const options = mockFetch.mock.calls[0][1];
     const body = JSON.parse(options.body);
-    
-    // Prüfen ob href="#" gesetzt ist
-    expect(body.body.content).toContain('href="#"');
+
+    expect(body.hostedContents).toEqual([]);
+    expect(body.body.content).toContain('Original anzeigen');
+    expect(body.body.content).toContain('href="https://drive/img1"');
   });
 
-  test('resizes large landscape images correctly', async () => {
+  test('keeps image links even when multiple images are posted', async () => {
     const mockFetch = jest.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
     (global as any).fetch = mockFetch;
 
-    // Mock Image mit großen Dimensionen (Landscape)
-    (global as any).Image = class {
-      onload: any;
-      width = 2000; // > 1024
-      height = 1000;
-      set src(_: string) { setTimeout(() => this.onload && this.onload(), 0); }
-    };
+    const files = [
+      new File(['a'], 'img1.jpg', { type: 'image/jpeg' }),
+      new File(['b'], 'img2.jpg', { type: 'image/jpeg' })
+    ];
 
-    const files = [new File(['a'], 'large.jpg', { type: 'image/jpeg' })];
-    await postMessageToChannel('token', 't1', 'c1', 'Text', [], files, []);
+    await postMessageToChannel('token', 't1', 'c1', 'Text', ['https://drive/1', 'https://drive/2'], files, []);
 
-    // Wir können nicht direkt prüfen, ob resized wurde, da Canvas gemockt ist,
-    // aber wir stellen sicher, dass der Code-Pfad ohne Fehler durchläuft.
-    expect(mockFetch).toHaveBeenCalled();
-  });
+    const options = mockFetch.mock.calls[0][1];
+    const body = JSON.parse(options.body);
 
-  test('resizes large portrait images correctly', async () => {
-    const mockFetch = jest.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
-    (global as any).fetch = mockFetch;
-
-    // Mock Image mit großen Dimensionen (Portrait)
-    (global as any).Image = class {
-      onload: any;
-      width = 1000;
-      height = 2000; // > 1024
-      set src(_: string) { setTimeout(() => this.onload && this.onload(), 0); }
-    };
-
-    const files = [new File(['a'], 'large-portrait.jpg', { type: 'image/jpeg' })];
-    await postMessageToChannel('token', 't1', 'c1', 'Text', [], files, []);
-
-    expect(mockFetch).toHaveBeenCalled();
-  });
-
-  test('handles image loading errors gracefully', async () => {
-    // Mock Image das Fehler wirft
-    (global as any).Image = class {
-      onerror: any;
-      set src(_: string) { setTimeout(() => this.onerror && this.onerror(new Error('Load failed')), 0); }
-    };
-
-    const files = [new File(['a'], 'broken.jpg', { type: 'image/jpeg' })];
-    
-    // Sollte fehlschlagen, da prepareImageForHostedContent rejected
-    await expect(postMessageToChannel('token', 't1', 'c1', 'Text', [], files, []))
-        .rejects.toThrow();
+    expect(body.hostedContents).toEqual([]);
+    expect(body.body.content).toContain('href="https://drive/1"');
+    expect(body.body.content).toContain('href="https://drive/2"');
   });
 
   test('posts message without images or files', async () => {
@@ -256,19 +220,6 @@ describe('postMessageToChannel', () => {
     expect(body.mentions).toEqual([]);
     expect(body.body.content).toContain('Text only post');
     expect(body.body.content).not.toContain('src="../hostedContents/');
-  });
-
-  test('handles canvas.toBlob failure', async () => {
-    // Mock Canvas toBlob failure (callback with null)
-    jest.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((cb: any) => {
-        cb(null); // Simulate failure
-    });
-
-    const files = [new File(['a'], 'img.jpg', { type: 'image/jpeg' })];
-    
-    // FIX: Erwartete Fehlermeldung anpassen
-    await expect(postMessageToChannel('token', 't1', 'c1', 'Text', [], files, []))
-        .rejects.toThrow('Canvas toBlob failed');
   });
 
   test('renders video files with SharePoint stream URL instead of raw download URL', async () => {
@@ -318,28 +269,16 @@ describe('postMessageToChannel', () => {
     const options = mockFetch.mock.calls[0][1];
     const body = JSON.parse(options.body);
 
-    expect(body.hostedContents).toHaveLength(1);
-    expect(body.body.content).toContain('src="../hostedContents/1/$value"');
+    expect(body.hostedContents).toEqual([]);
+    expect(body.body.content).toContain('href="https://drive/img"');
+    expect(body.body.content).toContain('Original anzeigen');
     expect(body.body.content).toContain('manual.pdf');
     expect(body.body.content).toContain('https://drive/pdf');
   });
 
-  test('limits inline images when the message payload would exceed the threshold', async () => {
+  test('keeps all image links without inline-image payload trimming', async () => {
     const mockFetch = jest.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
     (global as any).fetch = mockFetch;
-
-    const largeBase64 = 'a'.repeat(2_000_000);
-    const oversizedFileReader = {
-      readAsDataURL: jest.fn().mockImplementation(function(this: any) {
-        this.result = `data:image/jpeg;base64,${largeBase64}`;
-        if (this.onload) this.onload();
-      }),
-      result: '',
-      onload: null as any,
-      onerror: null as any,
-    };
-
-    jest.spyOn(window, 'FileReader').mockImplementation(() => oversizedFileReader as any);
 
     const files = [
       new File(['a'], 'img1.jpg', { type: 'image/jpeg' }),
@@ -360,29 +299,16 @@ describe('postMessageToChannel', () => {
     const options = mockFetch.mock.calls[0][1];
     const body = JSON.parse(options.body);
 
-    expect(body.hostedContents).toHaveLength(1);
-    expect(body.body.content).toContain('src="../hostedContents/1/$value"');
-    expect(body.body.content).toContain('Es befinden sich noch 2 weitere Bilder in diesem Post');
-    expect(body.body.content).not.toContain('src="../hostedContents/2/$value"');
-    expect(new Blob([JSON.stringify(body)]).size).toBeLessThanOrEqual(MAX_MESSAGE_PAYLOAD_BYTES);
+    expect(body.hostedContents).toEqual([]);
+    expect(body.body.content).toContain('href="https://drive/1"');
+    expect(body.body.content).toContain('href="https://drive/2"');
+    expect(body.body.content).toContain('href="https://drive/3"');
+    expect(body.body.content).not.toContain('weitere Bilder');
   });
 
-  test('keeps non-image file links even when inline images are limited', async () => {
+  test('keeps non-image file links alongside image links', async () => {
     const mockFetch = jest.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
     (global as any).fetch = mockFetch;
-
-    const largeBase64 = 'a'.repeat(2_000_000);
-    const oversizedFileReader = {
-      readAsDataURL: jest.fn().mockImplementation(function(this: any) {
-        this.result = `data:image/jpeg;base64,${largeBase64}`;
-        if (this.onload) this.onload();
-      }),
-      result: '',
-      onload: null as any,
-      onerror: null as any,
-    };
-
-    jest.spyOn(window, 'FileReader').mockImplementation(() => oversizedFileReader as any);
 
     const files = [
       new File(['a'], 'img1.jpg', { type: 'image/jpeg' }),
@@ -403,9 +329,11 @@ describe('postMessageToChannel', () => {
     const options = mockFetch.mock.calls[0][1];
     const body = JSON.parse(options.body);
 
-    expect(body.hostedContents).toHaveLength(1);
+    expect(body.hostedContents).toEqual([]);
+    expect(body.body.content).toContain('href="https://drive/1"');
+    expect(body.body.content).toContain('href="https://drive/2"');
     expect(body.body.content).toContain('manual.pdf');
     expect(body.body.content).toContain('https://drive/manual');
-    expect(body.body.content).toContain('Es befinden sich noch 1 weitere Bilder in diesem Post');
+    expect(body.body.content).not.toContain('weitere Bilder');
   });
 });

@@ -71,7 +71,7 @@ describe('PostMessage posting', () => {
     expect(body.body.content).toContain('Neue Dateien hochgeladen');
   });
 
-  test('postMessageToChannel handles files to hostedContents', async () => {
+  test('postMessageToChannel renders image files as links without hostedContents', async () => {
     const token = 'token';
     const teamId = 't';
     const channelId = 'c';
@@ -79,47 +79,13 @@ describe('PostMessage posting', () => {
     const imageUrl = 'https://example.com/image.png';
     const files: any[] = [new File([new ArrayBuffer(10)], 'pic.jpg', { type: 'image/jpeg' })];
 
-    // Mock Image / canvas / FileReader as used in prepareImageForHostedContent
-    const realImage = (global as any).Image;
-    class FakeImage {
-      _src = '';
-      onload: any = null;
-      onerror: any = null;
-      width = 200;
-      height = 100;
-      set src(v: string) { this._src = v; setTimeout(() => { if (this.onload) this.onload(); }, 0); }
-      get src() { return this._src; }
-    }
-    (global as any).Image = FakeImage as any;
-    (global as any).URL.createObjectURL = jest.fn().mockReturnValue('blob:some-url');
-
-    const canvasMock = {
-      getContext: () => ({ drawImage: jest.fn() }),
-      toBlob: (cb: any) => setTimeout(() => cb(new Blob(['a'], { type: 'image/jpeg' })), 0)
-    } as any;
-    const createElementOrig = document.createElement.bind(document);
-    jest.spyOn(document, 'createElement').mockImplementation((tag: any) => {
-      if (tag === 'canvas') return canvasMock;
-      return createElementOrig(tag);
-    });
-
-    const frOrig = (global as any).FileReader;
-    class MockReader {
-      onload: any = null;
-      onerror: any = null;
-      result: any = null;
-      readAsDataURL() { this.result = 'data:image/jpeg;base64,abc'; setTimeout(() => { if (this.onload) this.onload({ target: { result: this.result } }); }, 0); }
-    }
-    (global as any).FileReader = MockReader;
-
     (global as any).fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
     await postMessageToChannel(token, teamId, channelId, customText, [imageUrl], files as any, [] as any);
     expect((global as any).fetch).toHaveBeenCalled();
 
-    // restore
-    (global as any).FileReader = frOrig;
-    (global as any).Image = realImage;
-    (document.createElement as jest.Mock).mockRestore();
+    const body = JSON.parse((global as any).fetch.mock.calls[0][1].body);
+    expect(body.hostedContents).toEqual([]);
+    expect(body.body.content).toContain('href="https://example.com/image.png"');
   });
 
   test('postMessageToChannel throws when message POST fails', async () => {
