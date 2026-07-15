@@ -140,6 +140,22 @@ const ChannelsList: React.FC<ChannelsListProps> = ({
         fetchChannels();
     }, [instance, account, team.id, isOnline, cachedChannelsKey, cachedAllChannelsKey]);
 
+    useEffect(() => {
+        if (channels.length === 0) {
+            setSelectedChannel(null);
+            onChannelSelect(null);
+            return;
+        }
+
+        if (selectedChannel && channels.some((channel) => channel.id === selectedChannel.id)) {
+            return;
+        }
+
+        const defaultChannel = channels.find((channel) => channel.displayName.toLowerCase() === 'general') || channels[0];
+        setSelectedChannel(defaultChannel);
+        onChannelSelect(defaultChannel);
+    }, [channels, selectedChannel, onChannelSelect]);
+
     const handleChannelSelect = (channel: Channel) => {
         setSelectedChannel(channel);
         onChannelSelect(channel);
