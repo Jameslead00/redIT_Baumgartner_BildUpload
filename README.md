@@ -7,6 +7,7 @@ Eine moderne, responsive Web-App zur einfachen Erstellung von Posts in Microsoft
 * Bild-Upload: Hochladen von Bildern in den OneDrive-Ordner "Bilder" des Teams. Thumbnails werden für schnelle Vorschau generiert.
 * Unterordner-Auswahl: Optionales Auswählen eines Unterordners im "Bilder"-Verzeichnis für gezielte Uploads. (Hinweis: Der Ordner "Bilder" und die entsprechenden Unterordner müssen bereits im Kanal existieren).
 * Post-Erstellung: Erstellen von Posts mit Text und bis zu 4 Bildern in ausgewählten Kanälen (weitere Bilder werden hochgeladen, aber nicht im Post angezeigt).
+* Qualitätsmangel-Mirror: Optionales zusätzliches Posten im General-Kanal des Qualitätsmangel-Teams, ohne die Dateien erneut zu uploaden. Der Spiegel-Post verwendet dieselbe Darstellung wie der normale Post und verweist auf das Original im ursprünglichen Team.
 * Offline-Modus: Vollständige Vorbereitung von Posts offline, lokale Speicherung mit Dexie, halbautomatische Synchronisation bei Wiederverbindung.
 * Caching: Teams und Kanäle werden für Favoriten gecached, um Offline-Zugang zu ermöglichen. Erfolgreich hochgeladene Posts werden automatisch aus dem Cache entfernt.
 * Service Worker: Caching für PWA-ähnliche Erfahrung.
@@ -52,7 +53,8 @@ Eine moderne, responsive Web-App zur einfachen Erstellung von Posts in Microsoft
 4. Wähle Bilder aus.
 5. Füge optional Text hinzu.
 6. Optional: Erwähne Personen über das Dropdown-Menü (@Name).
-7. Klicke "Datei(en) hochladen" – Bilder werden gecached und automatisch hochgeladen/gepostet. Alle Bilder erscheinen direkt im Teams-Post.
+7. Optional: Aktiviere die Checkbox „Auch im Qualitätsmangel-Team posten“, wenn der Beitrag zusätzlich im General-Kanal des Qualitätsmangel-Teams erscheinen soll.
+8. Klicke "Datei(en) hochladen" – Bilder werden gecached und automatisch hochgeladen/gepostet. Alle Bilder erscheinen direkt im Teams-Post. Wenn der Mirror aktiviert ist, wird der Beitrag im Qualitätsmangel-Team ohne zweite Datei-Uploads veröffentlicht und verweist auf das Original im ursprünglichen Team.
 
 ## Offline-Modus:
 
