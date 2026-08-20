@@ -1,4 +1,4 @@
-import { postMessageToChannel } from '../ui-components/PostMessage';
+import { postMessageToChannel, postMessageToQualityTeamMirror, shouldMirrorToQualityTeam, QUALITY_TEAM_ID } from '../ui-components/PostMessage';
 
 const MAX_MESSAGE_PAYLOAD_BYTES = 3.5 * 1024 * 1024;
 
@@ -82,6 +82,42 @@ describe('postMessageToChannel', () => {
     expect(body.mentions[0].mentioned.user.id).toBe('u1');
     expect(body.body.content).toContain('Max Mustermann');
     expect(body.body.content).toContain('Hello');
+  });
+
+  test('does not mirror to the quality team when the post is already in that team', () => {
+    expect(shouldMirrorToQualityTeam(QUALITY_TEAM_ID, true)).toBe(false);
+    expect(shouldMirrorToQualityTeam('other-team', true)).toBe(true);
+    expect(shouldMirrorToQualityTeam(QUALITY_TEAM_ID, false)).toBe(false);
+  });
+
+  test('posts a mirror to the quality team general channel without uploading images again', async () => {
+    const mockFetch = jest.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ value: [{ id: 'general-chan', displayName: 'General' }] }),
+      })
+      .mockResolvedValueOnce({ ok: true, text: async () => '' });
+
+    (global as any).fetch = mockFetch;
+
+    await postMessageToQualityTeamMirror(
+      'token123',
+      'Hello from mirror',
+      ['https://contoso.sharepoint.com/sites/Team/Shared%20Documents/General/Bilder/img1.jpg'],
+      [new File(['a'], 'img1.jpg', { type: 'image/jpeg' })],
+      []
+    );
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch.mock.calls[0][0]).toContain('/teams/21e376dd-06ad-4b61-8cf8-37aa8a0cb9fa/channels');
+
+    const payload = JSON.parse(mockFetch.mock.calls[1][1].body);
+    expect(payload.body.content).toContain('Hello from mirror');
+    expect(payload.body.content).toContain('src="../hostedContents/');
+    expect(payload.body.content).toContain('https://contoso.sharepoint.com/sites/Team/Shared%20Documents/General/Bilder');
+    expect(payload.hostedContents.length).toBeGreaterThan(0);
+    expect(payload.body.content).toContain('Original anzeigen');
+    expect(payload.mentions).toEqual([]);
   });
 
   test('does not render position in mention text when posting', async () => {

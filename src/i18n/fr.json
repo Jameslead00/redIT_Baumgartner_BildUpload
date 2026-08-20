@@ -32,7 +32,8 @@
     "imagesSavedOffline": "{{count}} fichier(s) enregistré(s) hors ligne !",
     "cachedPostsSynced": "{{count}} publication(s) en cache a/ont été téléchargée(s) automatiquement !",
     "fetchTeamsError": "Erreur lors du chargement des teams",
-    "fetchTeamsFailure": "Impossible de charger les teams"
+    "fetchTeamsFailure": "Impossible de charger les teams",
+    "qualityTeamCheckbox": "Publier aussi dans l'équipe Qualité / Performance"
   },
   "channels": {
     "selectChannel": "Sélectionner un canal",

@@ -156,6 +156,124 @@ const escapeHtml = (str: string) => {
     });
 };
 
+export const QUALITY_TEAM_ID = '21e376dd-06ad-4b61-8cf8-37aa8a0cb9fa';
+
+export const shouldMirrorToQualityTeam = (teamId?: string, enabled = false): boolean => {
+    return Boolean(enabled && teamId && teamId !== QUALITY_TEAM_ID);
+};
+
+export const postMessageToQualityTeamMirror = async (
+    accessToken: string,
+    customText: string,
+    imageUrls: string[] = [],
+    files: File[] = [],
+    mentions: MentionUser[] = [],
+    options?: { correlationId?: string; teamId?: string }
+): Promise<void> => {
+    const correlationId = options?.correlationId || 'no-correlation';
+    const teamId = options?.teamId || QUALITY_TEAM_ID;
+    const safeText = customText && customText.trim() ? customText : (i18n as any).t('postMessage.newFilesUploaded');
+
+    const channelsResponse = await fetch(`https://graph.microsoft.com/v1.0/teams/${teamId}/channels`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!channelsResponse.ok) {
+        const responseText = await channelsResponse.text();
+        throw new Error(`[${correlationId}] Failed to load channels for quality-team mirror: ${channelsResponse.status} ${responseText}`);
+    }
+
+    const channelsData = await channelsResponse.json();
+    const channels = Array.isArray(channelsData?.value) ? channelsData.value : [];
+    const generalChannel = channels.find((channel: any) => (channel.displayName || '').toLowerCase() === 'general');
+
+    if (!generalChannel?.id) {
+        throw new Error(`[${correlationId}] Could not find the General channel for quality-team mirror in team ${teamId}`);
+    }
+
+    const validMentions = [] as MentionUser[];
+    const mentionEntities = [] as Array<{
+        id: number;
+        mentionText: string;
+        mentioned: {
+            user: {
+                id: string;
+                displayName: string;
+                userIdentityType: string;
+            };
+        };
+    }>;
+
+    const mentionsHtml = '';
+    const validUploads = dedupeUploadEntries(
+        files.map((file, index) => ({
+            file,
+            oneDriveUrl: (imageUrls && imageUrls[index]) || '#',
+        }))
+    );
+
+    const fileEntries: FileEntry[] = [];
+    let omittedImageCount = 0;
+
+    for (const { file, oneDriveUrl } of validUploads) {
+        if (!isImageFile(file)) {
+            fileEntries.push({
+                file,
+                oneDriveUrl,
+                hostedContent: null,
+            });
+            continue;
+        }
+
+        const contentBytes = await prepareImageForHostedContent(file);
+        const candidateEntry: FileEntry = {
+            file,
+            oneDriveUrl,
+            hostedContent: {
+                '@microsoft.graph.temporaryId': (fileEntries.filter((entry) => entry.hostedContent).length + 1).toString(),
+                contentBytes,
+                contentType: file.type || 'image/jpeg',
+            },
+        };
+
+        const tentativePayload = buildMessagePayload(
+            safeText,
+            [...fileEntries, candidateEntry],
+            mentionEntities,
+            mentionsHtml,
+            omittedImageCount
+        );
+
+        if (getPayloadSize(tentativePayload) <= MAX_MESSAGE_PAYLOAD_BYTES) {
+            fileEntries.push(candidateEntry);
+        } else {
+            omittedImageCount += 1;
+        }
+    }
+
+    const payload = buildMessagePayload(
+        safeText,
+        fileEntries,
+        mentionEntities,
+        mentionsHtml,
+        omittedImageCount
+    );
+
+    const response = await fetch(`https://graph.microsoft.com/v1.0/teams/${teamId}/channels/${generalChannel.id}/messages`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+        const responseText = await response.text();
+        throw new Error(`[${correlationId}] Failed to post quality-team mirror message: ${response.status} ${responseText}`);
+    }
+};
+
 const toSharePointLibraryFolderUrl = (url: string): string => {
     if (!url || url === '#') return url;
 
