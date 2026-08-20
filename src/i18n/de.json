@@ -32,7 +32,8 @@
     "imagesSavedOffline": "{{count}} Datei(en) offline gespeichert!",
     "cachedPostsSynced": "{{count}} gecachte(r) Beitrag/Beiträge wurde(n) automatisch hochgeladen!",
     "fetchTeamsError": "Fehler beim Laden der Teams",
-    "fetchTeamsFailure": "Teams konnten nicht geladen werden"
+    "fetchTeamsFailure": "Teams konnten nicht geladen werden",
+    "qualityTeamCheckbox": "Auch im Qualitätsmangel-Team posten"
   },
   "channels": {
     "selectChannel": "Kanal auswählen",

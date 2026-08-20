@@ -156,6 +156,92 @@ const escapeHtml = (str: string) => {
     });
 };
 
+export const QUALITY_TEAM_ID = '21e376dd-06ad-4b61-8cf8-37aa8a0cb9fa';
+
+export const shouldMirrorToQualityTeam = (teamId?: string, enabled = false): boolean => {
+    return Boolean(enabled && teamId && teamId !== QUALITY_TEAM_ID);
+};
+
+export const postMessageToQualityTeamMirror = async (
+    accessToken: string,
+    customText: string,
+    imageUrls: string[] = [],
+    mentions: MentionUser[] = [],
+    options?: { correlationId?: string; teamId?: string }
+): Promise<void> => {
+    const correlationId = options?.correlationId || 'no-correlation';
+    const teamId = options?.teamId || QUALITY_TEAM_ID;
+    const validUrls = (imageUrls || []).filter((url): url is string => typeof url === 'string' && url.trim().length > 0);
+    const safeText = customText && customText.trim() ? customText : (i18n as any).t('postMessage.newFilesUploaded');
+
+    const channelsResponse = await fetch(`https://graph.microsoft.com/v1.0/teams/${teamId}/channels`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!channelsResponse.ok) {
+        const responseText = await channelsResponse.text();
+        throw new Error(`[${correlationId}] Failed to load channels for quality-team mirror: ${channelsResponse.status} ${responseText}`);
+    }
+
+    const channelsData = await channelsResponse.json();
+    const channels = Array.isArray(channelsData?.value) ? channelsData.value : [];
+    const generalChannel = channels.find((channel: any) => (channel.displayName || '').toLowerCase() === 'general');
+
+    if (!generalChannel?.id) {
+        throw new Error(`[${correlationId}] Could not find the General channel for quality-team mirror in team ${teamId}`);
+    }
+
+    const mentionEntities = mentions
+        .filter((user) => user.id && user.displayName)
+        .map((user, index) => ({
+            id: index,
+            mentionText: user.displayName,
+            mentioned: {
+                user: {
+                    id: user.id,
+                    displayName: user.displayName,
+                    userIdentityType: 'aadUser',
+                },
+            },
+        }));
+
+    const mentionsHtml = mentionEntities.length > 0
+        ? mentionEntities.map((entity) => `<at id="${entity.id}">${escapeHtml(entity.mentionText)}</at>`).join(' ')
+        : '';
+
+    const imageLinks = validUrls.length > 0
+        ? validUrls.map((url, index) => `<div style="margin-top: 8px;"><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Bild ${index + 1}</a></div>`).join('')
+        : '';
+
+    const content = `
+        <div>
+            <p>${mentionsHtml ? `${mentionsHtml} ` : ''}${escapeHtml(safeText)}</p>
+            ${imageLinks}
+        </div>
+    `;
+
+    const response = await fetch(`https://graph.microsoft.com/v1.0/teams/${teamId}/channels/${generalChannel.id}/messages`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            body: {
+                contentType: 'html',
+                content,
+            },
+            mentions: mentionEntities,
+            hostedContents: [],
+        }),
+    });
+
+    if (!response.ok) {
+        const responseText = await response.text();
+        throw new Error(`[${correlationId}] Failed to post quality-team mirror message: ${response.status} ${responseText}`);
+    }
+};
+
 const toSharePointLibraryFolderUrl = (url: string): string => {
     if (!url || url === '#') return url;
 

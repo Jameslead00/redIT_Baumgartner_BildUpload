@@ -15,6 +15,9 @@ import * as msal from "@azure/msal-react";
 // Mock PostMessage component function
 jest.mock('../ui-components/PostMessage', () => ({
   postMessageToChannel: jest.fn(),
+  postMessageToQualityTeamMirror: jest.fn(),
+  shouldMirrorToQualityTeam: jest.fn((teamId: string | undefined, enabled: boolean) => Boolean(enabled && teamId && teamId !== '21e376dd-06ad-4b61-8cf8-37aa8a0cb9fa')),
+  QUALITY_TEAM_ID: '21e376dd-06ad-4b61-8cf8-37aa8a0cb9fa',
 }));
 import { postMessageToChannel } from '../ui-components/PostMessage';
 
@@ -216,6 +219,33 @@ describe("TeamsList component", () => {
     // ChannelsList should now be rendered for the selected team
     await waitFor(() => {
       expect(screen.getByTestId("mock-channels")).toBeInTheDocument();
+    });
+  });
+
+  test("renders the quality team checkbox after selecting a team", async () => {
+    const fakeMsalInstance = {
+      acquireTokenSilent: jest.fn().mockResolvedValue({ accessToken: 'mock-token' })
+    };
+
+    (msal.useMsal as jest.Mock).mockReturnValue({ instance: fakeMsalInstance, accounts: [{}] });
+    (msal.useAccount as jest.Mock).mockReturnValue({ name: "User", username: "u@test" });
+
+    (global as any).fetch.mockImplementation((url: string) => {
+      if (url.includes('/me/joinedTeams')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: teams }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [{ id: 'c1', displayName: 'General' }] }) });
+    });
+
+    render(<TeamsList />);
+
+    const input = await screen.findByLabelText(/Teams suchen/i);
+    await userEvent.click(input);
+    await userEvent.type(input, 'Team One');
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Auch im Qualitätsmangel-Team posten/i)).toBeInTheDocument();
     });
   });
 

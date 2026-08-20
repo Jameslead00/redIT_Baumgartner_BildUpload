@@ -5,8 +5,8 @@ import { loginRequest } from "../authConfig";
 import { db, Team, Channel, SubFolder } from '../db'; // Import SubFolder
 import { logToSharePoint } from "../utils/Logger";
 import ChannelsList from "./ChannelsList";
-import { postMessageToChannel, MentionUser } from "./PostMessage"; // MentionUser importieren
-import { Autocomplete, TextField, Button, Typography, Box, Alert, IconButton, Snackbar } from "@mui/material";
+import { postMessageToChannel, MentionUser, postMessageToQualityTeamMirror, QUALITY_TEAM_ID, shouldMirrorToQualityTeam } from "./PostMessage"; // MentionUser importieren
+import { Autocomplete, TextField, Button, Typography, Box, Alert, IconButton, Snackbar, Checkbox, FormControlLabel } from "@mui/material";
 import { Star, StarBorder } from "@mui/icons-material";
 import { checkFolderExists, createFolder, uploadLargeFile, uploadSmallFile, encodeFilesToBase64, getFolderPath, GraphOperationError, isGraphOperationError } from './ImageUpload';
 import { useTranslation } from "react-i18next";
@@ -23,6 +23,7 @@ const TeamsList: React.FC = () => {
     const [uploadSuccess, setUploadSuccess] = useState<boolean>(false);
     const [customText, setCustomText] = useState<string>("");
     const [imageUrls, setImageUrls] = useState<string[]>([]);
+    const [alsoPostToQualityTeam, setAlsoPostToQualityTeam] = useState<boolean>(false);
     const [posting, setPosting] = useState<boolean>(false);
     const [favorites, setFavorites] = useState<Set<string>>(new Set());
     const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -620,6 +621,7 @@ const TeamsList: React.FC = () => {
         setUploadSuccess(false);
         setCustomText("");
         setImageUrls([]);
+        setAlsoPostToQualityTeam(false);
         setUploadedFiles([]);
         setSelectedMentions([]); // Reset Mentions
     };
@@ -764,6 +766,20 @@ const TeamsList: React.FC = () => {
                 { correlationId }
             );
 
+            if (shouldMirrorToQualityTeam(post.teamId, post.alsoPostToQualityTeam)) {
+                try {
+                    await postMessageToQualityTeamMirror(
+                        accessToken,
+                        post.text,
+                        uploadedUrls,
+                        mentions,
+                        { correlationId, teamId: QUALITY_TEAM_ID }
+                    );
+                } catch (mirrorError) {
+                    console.error(`[${correlationId}] Quality-team mirror failed but primary post succeeded:`, mirrorError);
+                }
+            }
+
             // LOGGING HINZUFÜGEN (nur bei End-to-End Erfolg)
             currentStep = 'logSuccess';
             const totalSizeMB = files.reduce((acc, file) => acc + file.size, 0) / (1024 * 1024);
@@ -840,7 +856,8 @@ const TeamsList: React.FC = () => {
             imageUrls: [] as string[],
             timestamp: Date.now(),
             mentions: selectedMentions, // Mentions speichern
-            subFolder: subFolder // Subfolder speichern
+            subFolder: subFolder, // Subfolder speichern
+            alsoPostToQualityTeam,
         };
         const postId = await db.posts.add(post);
         if (files && files.length > 0) {
@@ -865,6 +882,7 @@ const TeamsList: React.FC = () => {
         // Reset alles
         setCustomText('');
         setImageUrls([]);
+        setAlsoPostToQualityTeam(false);
         setSelectedChannel(null);
         setSelectedTeam(null);
         setUploadSuccess(false);
@@ -959,6 +977,20 @@ const TeamsList: React.FC = () => {
                     mentions,
                     { correlationId }
                 );
+
+                if (shouldMirrorToQualityTeam(post.teamId, post.alsoPostToQualityTeam)) {
+                    try {
+                        await postMessageToQualityTeamMirror(
+                            accessToken,
+                            post.text,
+                            uploadedUrls,
+                            mentions,
+                            { correlationId, teamId: QUALITY_TEAM_ID }
+                        );
+                    } catch (mirrorError) {
+                        console.error(`[${correlationId}] Quality-team mirror failed during offline sync:`, mirrorError);
+                    }
+                }
                 
                 await db.posts.delete(post.id);
                 await db.images.where('postId').equals(post.id).delete();
@@ -1011,6 +1043,16 @@ const TeamsList: React.FC = () => {
             />
             {selectedTeam && (
                 <>
+                    <FormControlLabel
+                        control={
+                            <Checkbox
+                                checked={alsoPostToQualityTeam}
+                                onChange={(event) => setAlsoPostToQualityTeam(event.target.checked)}
+                            />
+                        }
+                        label={t('teams.qualityTeamCheckbox')}
+                        sx={{ mt: 1, mb: 1 }}
+                    />
                     <ChannelsList
                         team={selectedTeam}
                         onChannelSelect={setSelectedChannel}

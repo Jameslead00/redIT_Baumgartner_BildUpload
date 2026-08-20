@@ -40,6 +40,7 @@ export interface OfflinePost {
     timestamp: number;
     mentions?: DBMentionUser[];
     subFolder?: string; // Added subFolder field
+    alsoPostToQualityTeam?: boolean;
 }
 
 export class OfflineDB extends Dexie {
