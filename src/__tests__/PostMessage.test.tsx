@@ -104,6 +104,7 @@ describe('postMessageToChannel', () => {
       'token123',
       'Hello from mirror',
       ['https://contoso.sharepoint.com/sites/Team/Shared%20Documents/General/Bilder/img1.jpg'],
+      [new File(['a'], 'img1.jpg', { type: 'image/jpeg' })],
       []
     );
 
@@ -112,8 +113,10 @@ describe('postMessageToChannel', () => {
 
     const payload = JSON.parse(mockFetch.mock.calls[1][1].body);
     expect(payload.body.content).toContain('Hello from mirror');
-    expect(payload.body.content).toContain('https://contoso.sharepoint.com/sites/Team/Shared%20Documents/General/Bilder/img1.jpg');
-    expect(payload.hostedContents).toEqual([]);
+    expect(payload.body.content).toContain('src="../hostedContents/');
+    expect(payload.body.content).toContain('https://contoso.sharepoint.com/sites/Team/Shared%20Documents/General/Bilder');
+    expect(payload.hostedContents.length).toBeGreaterThan(0);
+    expect(payload.body.content).toContain('Original anzeigen');
   });
 
   test('does not render position in mention text when posting', async () => {

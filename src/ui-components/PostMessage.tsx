@@ -166,12 +166,12 @@ export const postMessageToQualityTeamMirror = async (
     accessToken: string,
     customText: string,
     imageUrls: string[] = [],
+    files: File[] = [],
     mentions: MentionUser[] = [],
     options?: { correlationId?: string; teamId?: string }
 ): Promise<void> => {
     const correlationId = options?.correlationId || 'no-correlation';
     const teamId = options?.teamId || QUALITY_TEAM_ID;
-    const validUrls = (imageUrls || []).filter((url): url is string => typeof url === 'string' && url.trim().length > 0);
     const safeText = customText && customText.trim() ? customText : (i18n as any).t('postMessage.newFilesUploaded');
 
     const channelsResponse = await fetch(`https://graph.microsoft.com/v1.0/teams/${teamId}/channels`, {
@@ -191,34 +191,73 @@ export const postMessageToQualityTeamMirror = async (
         throw new Error(`[${correlationId}] Could not find the General channel for quality-team mirror in team ${teamId}`);
     }
 
-    const mentionEntities = mentions
-        .filter((user) => user.id && user.displayName)
-        .map((user, index) => ({
-            id: index,
-            mentionText: user.displayName,
-            mentioned: {
-                user: {
-                    id: user.id,
-                    displayName: user.displayName,
-                    userIdentityType: 'aadUser',
-                },
+    const validMentions = mentions.filter((user) => user.id && user.displayName);
+    const mentionEntities = validMentions.map((user, index) => ({
+        id: index,
+        mentionText: user.displayName,
+        mentioned: {
+            user: {
+                id: user.id,
+                displayName: user.displayName,
+                userIdentityType: 'aadUser',
             },
-        }));
+        },
+    }));
 
-    const mentionsHtml = mentionEntities.length > 0
-        ? mentionEntities.map((entity) => `<at id="${entity.id}">${escapeHtml(entity.mentionText)}</at>`).join(' ')
-        : '';
+    const mentionsHtml = validMentions.map((user, index) => `<at id="${index}">${escapeHtml(user.displayName)}</at>`).join(' ');
+    const validUploads = dedupeUploadEntries(
+        files.map((file, index) => ({
+            file,
+            oneDriveUrl: (imageUrls && imageUrls[index]) || '#',
+        }))
+    );
 
-    const imageLinks = validUrls.length > 0
-        ? validUrls.map((url, index) => `<div style="margin-top: 8px;"><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Bild ${index + 1}</a></div>`).join('')
-        : '';
+    const fileEntries: FileEntry[] = [];
+    let omittedImageCount = 0;
 
-    const content = `
-        <div>
-            <p>${mentionsHtml ? `${mentionsHtml} ` : ''}${escapeHtml(safeText)}</p>
-            ${imageLinks}
-        </div>
-    `;
+    for (const { file, oneDriveUrl } of validUploads) {
+        if (!isImageFile(file)) {
+            fileEntries.push({
+                file,
+                oneDriveUrl,
+                hostedContent: null,
+            });
+            continue;
+        }
+
+        const contentBytes = await prepareImageForHostedContent(file);
+        const candidateEntry: FileEntry = {
+            file,
+            oneDriveUrl,
+            hostedContent: {
+                '@microsoft.graph.temporaryId': (fileEntries.filter((entry) => entry.hostedContent).length + 1).toString(),
+                contentBytes,
+                contentType: file.type || 'image/jpeg',
+            },
+        };
+
+        const tentativePayload = buildMessagePayload(
+            safeText,
+            [...fileEntries, candidateEntry],
+            mentionEntities,
+            mentionsHtml,
+            omittedImageCount
+        );
+
+        if (getPayloadSize(tentativePayload) <= MAX_MESSAGE_PAYLOAD_BYTES) {
+            fileEntries.push(candidateEntry);
+        } else {
+            omittedImageCount += 1;
+        }
+    }
+
+    const payload = buildMessagePayload(
+        safeText,
+        fileEntries,
+        mentionEntities,
+        mentionsHtml,
+        omittedImageCount
+    );
 
     const response = await fetch(`https://graph.microsoft.com/v1.0/teams/${teamId}/channels/${generalChannel.id}/messages`, {
         method: 'POST',
@@ -227,12 +266,8 @@ export const postMessageToQualityTeamMirror = async (
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-            body: {
-                contentType: 'html',
-                content,
-            },
+            ...payload,
             mentions: mentionEntities,
-            hostedContents: [],
         }),
     });
 

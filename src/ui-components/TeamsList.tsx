@@ -772,6 +772,7 @@ const TeamsList: React.FC = () => {
                         accessToken,
                         post.text,
                         uploadedUrls,
+                        files,
                         mentions,
                         { correlationId, teamId: QUALITY_TEAM_ID }
                     );
@@ -984,6 +985,7 @@ const TeamsList: React.FC = () => {
                             accessToken,
                             post.text,
                             uploadedUrls,
+                            files,
                             mentions,
                             { correlationId, teamId: QUALITY_TEAM_ID }
                         );
