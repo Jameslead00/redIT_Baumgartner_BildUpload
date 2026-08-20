@@ -117,6 +117,7 @@ describe('postMessageToChannel', () => {
     expect(payload.body.content).toContain('https://contoso.sharepoint.com/sites/Team/Shared%20Documents/General/Bilder');
     expect(payload.hostedContents.length).toBeGreaterThan(0);
     expect(payload.body.content).toContain('Original anzeigen');
+    expect(payload.mentions).toEqual([]);
   });
 
   test('does not render position in mention text when posting', async () => {

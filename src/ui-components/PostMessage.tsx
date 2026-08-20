@@ -191,20 +191,20 @@ export const postMessageToQualityTeamMirror = async (
         throw new Error(`[${correlationId}] Could not find the General channel for quality-team mirror in team ${teamId}`);
     }
 
-    const validMentions = mentions.filter((user) => user.id && user.displayName);
-    const mentionEntities = validMentions.map((user, index) => ({
-        id: index,
-        mentionText: user.displayName,
+    const validMentions = [] as MentionUser[];
+    const mentionEntities = [] as Array<{
+        id: number;
+        mentionText: string;
         mentioned: {
             user: {
-                id: user.id,
-                displayName: user.displayName,
-                userIdentityType: 'aadUser',
-            },
-        },
-    }));
+                id: string;
+                displayName: string;
+                userIdentityType: string;
+            };
+        };
+    }>;
 
-    const mentionsHtml = validMentions.map((user, index) => `<at id="${index}">${escapeHtml(user.displayName)}</at>`).join(' ');
+    const mentionsHtml = '';
     const validUploads = dedupeUploadEntries(
         files.map((file, index) => ({
             file,
@@ -265,10 +265,7 @@ export const postMessageToQualityTeamMirror = async (
             Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-            ...payload,
-            mentions: mentionEntities,
-        }),
+        body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
