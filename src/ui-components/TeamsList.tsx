@@ -1076,34 +1076,34 @@ const TeamsList: React.FC = () => {
                     />
                     
                     {/* UI für Mentions hinzufügen */}
-                    {teamMembers.length > 0 && (
-                        <Autocomplete
-                            multiple
-                            disableCloseOnSelect
-                            options={teamMembers}
-                            getOptionLabel={(option) => option.displayName}
-                            value={selectedMentions}
-                            isOptionEqualToValue={(option, value) => option.id === value.id}
-                            onChange={(event, newValue) => {
-                                setSelectedMentions(newValue);
-                            }}
-                            renderOption={(props, option, { selected }) => (
-                                <Box component="li" {...props} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <Checkbox checked={selected} tabIndex={-1} disableRipple />
-                                    {getMentionDropdownLabel(option)}
-                                </Box>
-                            )}
-                            renderInput={(params) => (
-                                <TextField 
-                                    {...params} 
-                                    label={t('teams.mentionLabel')} 
-                                    placeholder={t('teams.mentionPlaceholder')} 
-                                    variant="outlined"
-                                />
-                            )}
-                            sx={{ mt: 2 }}
-                        />
-                    )}
+                    <Autocomplete
+                        multiple
+                        disableCloseOnSelect
+                        options={teamMembers}
+                        disabled={teamMembers.length === 0}
+                        getOptionLabel={(option) => option.displayName}
+                        value={selectedMentions}
+                        isOptionEqualToValue={(option, value) => option.id === value.id}
+                        onChange={(event, newValue) => {
+                            setSelectedMentions(newValue);
+                        }}
+                        renderOption={(props, option, { selected }) => (
+                            <Box component="li" {...props} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Checkbox checked={selected} tabIndex={-1} disableRipple />
+                                {getMentionDropdownLabel(option)}
+                            </Box>
+                        )}
+                        renderInput={(params) => (
+                            <TextField 
+                                {...params} 
+                                label={t('teams.mentionLabel')} 
+                                placeholder={teamMembers.length === 0 ? t('teams.mentionPlaceholder') : t('teams.mentionPlaceholder')} 
+                                variant="outlined"
+                            />
+                        )}
+                        noOptionsText={teamMembers.length === 0 ? t('teams.mentionPlaceholder') : 'Keine Personen gefunden'}
+                        sx={{ mt: 2 }}
+                    />
                 </>
             )}
 
