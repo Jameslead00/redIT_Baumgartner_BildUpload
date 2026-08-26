@@ -154,7 +154,8 @@ export function buildEmployeeTeamHistory(entries: ParsedLogEntry[], selectedUser
     filteredEntries.forEach((entry) => {
         const dateKey = toDateKey(entry.logtime);
         const team = (entry.targetTeam ?? "Unbekannt").trim() || "Unbekannt";
-        const current = historyMap.get(dateKey) ?? {
+        const bundleKey = `${dateKey}::${team}`;
+        const current = historyMap.get(bundleKey) ?? {
             user: selectedUser.toLowerCase(),
             date: dateKey,
             team,
@@ -166,10 +167,9 @@ export function buildEmployeeTeamHistory(entries: ParsedLogEntry[], selectedUser
 
         current.totalMB += entry.totalSizeMB;
         current.uploads += 1;
-        current.status = entry.status;
-        current.team = team;
+        current.status = current.status === "Error" || entry.status === "Error" ? "Error" : "Success";
         current.logtime = current.logtime > entry.logtime ? current.logtime : entry.logtime;
-        historyMap.set(dateKey, current);
+        historyMap.set(bundleKey, current);
     });
 
     return Array.from(historyMap.values())
@@ -355,18 +355,6 @@ const StatsPage: React.FC = () => {
     const successfulUploads = currentEntries.filter((entry) => entry.status === "Success").length;
     const failedUploads = currentEntries.filter((entry) => entry.status === "Error").length;
     const employeeLeader = selectedEmployeeSummary ?? employeeUsage[0] ?? null;
-    const monthlyActiveUsers = useMemo(() => {
-        const map = new Map<string, Set<string>>();
-        currentEntries.forEach((entry) => {
-            const key = toMonthKey(entry.logtime);
-            const users = map.get(key) ?? new Set<string>();
-            users.add(parseUserFromTitle(entry.title));
-            map.set(key, users);
-        });
-        return Array.from(map.entries())
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([label, users]) => ({ label, activeUsers: users.size }));
-    }, [currentEntries]);
 
     // ── Render ────────────────────────────────────────────────────────────────
 
@@ -559,19 +547,6 @@ const StatsPage: React.FC = () => {
             </Box>
 
             <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap", mb: 4 }}>
-                <Paper elevation={2} sx={{ p: 2, flex: 2, minWidth: 320 }}>
-                    <Typography variant="h6" gutterBottom>Aktive Nutzer pro Monat</Typography>
-                    <ResponsiveContainer width="100%" height={260}>
-                        <BarChart data={monthlyActiveUsers}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="label" />
-                            <YAxis allowDecimals={false} />
-                            <Tooltip />
-                            <Bar dataKey="activeUsers" name="Aktive Nutzer" fill="#9c27b0" />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </Paper>
-
                 <Paper elevation={2} sx={{ p: 2, flex: 1, minWidth: 260 }}>
                     <Typography variant="h6" gutterBottom>Top 5 Mitarbeiter</Typography>
                     <Table size="small">
@@ -640,14 +615,14 @@ const StatsPage: React.FC = () => {
                                 <TableRow>
                                     <TableCell>Datum</TableCell>
                                     <TableCell>Team</TableCell>
-                                    <TableCell align="right">Uploads</TableCell>
+                                    <TableCell align="right">Anzahl Posts</TableCell>
                                     <TableCell align="right">MB</TableCell>
                                     <TableCell>Status</TableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
                                 {selectedEmployeeHistory.map((item) => (
-                                    <TableRow key={`${item.user}-${item.date}`}>
+                                    <TableRow key={`${item.user}-${item.date}-${item.team}`}>
                                         <TableCell>{item.date}</TableCell>
                                         <TableCell>{item.team}</TableCell>
                                         <TableCell align="right">{item.uploads}</TableCell>
