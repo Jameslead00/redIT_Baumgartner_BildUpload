@@ -1,4 +1,4 @@
-import { buildEmployeeTeamHistory, buildEmployeeUsageSummary, parseUserFromTitle } from '../pages/StatsPage';
+import { buildDailyTeamPostChart, buildEmployeeTeamHistory, buildEmployeeUsageSummary, parseUserFromTitle } from '../pages/StatsPage';
 
 describe('StatsPage reporting helpers', () => {
   test('parses the employee email from the SharePoint log title', () => {
@@ -96,6 +96,57 @@ describe('StatsPage reporting helpers', () => {
     expect(history).toEqual([
       expect.objectContaining({ user: 'sbaumgartner@baumgartnerfenster.ch', team: 'Team B', date: '2026-08-11' }),
       expect.objectContaining({ user: 'sbaumgartner@baumgartnerfenster.ch', team: 'Team A', date: '2026-08-10' })
+    ]);
+  });
+
+  test('counts distinct posts by day and team for one employee', () => {
+    const entries = [
+      {
+        title: 'Upload by sbaumgartner@baumgartnerfenster.ch',
+        logtime: new Date('2026-08-10T08:00:00Z'),
+        photoCount: 12,
+        totalSizeMB: 22,
+        status: 'Success' as const,
+        errorMessage: '',
+        targetTeam: 'Team A'
+      },
+      {
+        title: 'Upload by sbaumgartner@baumgartnerfenster.ch',
+        logtime: new Date('2026-08-10T09:00:00Z'),
+        photoCount: 4,
+        totalSizeMB: 8,
+        status: 'Success' as const,
+        errorMessage: '',
+        targetTeam: 'Team B'
+      },
+      {
+        title: 'Upload by sbaumgartner@baumgartnerfenster.ch',
+        logtime: new Date('2026-08-10T10:00:00Z'),
+        photoCount: 7,
+        totalSizeMB: 14,
+        status: 'Success' as const,
+        errorMessage: '',
+        targetTeam: 'Team A'
+      },
+      {
+        title: 'Upload by redadmin@baumgartnerfenster.ch',
+        logtime: new Date('2026-08-10T11:00:00Z'),
+        photoCount: 2,
+        totalSizeMB: 4,
+        status: 'Success' as const,
+        errorMessage: '',
+        targetTeam: 'Team A'
+      }
+    ];
+
+    const chartData = buildDailyTeamPostChart(entries as any, 'sbaumgartner@baumgartnerfenster.ch');
+
+    expect(chartData).toEqual([
+      expect.objectContaining({
+        date: '2026-08-10',
+        'Team A': 2,
+        'Team B': 1
+      })
     ]);
   });
 });

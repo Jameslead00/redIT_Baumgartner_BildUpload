@@ -77,6 +77,11 @@ interface EmployeeTeamHistoryEntry {
     logtime: Date;
 }
 
+interface DailyTeamPostEntry {
+    date: string;
+    [team: string]: string | number;
+}
+
 // ─── Farben für PieChart ──────────────────────────────────────────────────────
 
 const PIE_COLORS = ["#4caf50", "#f44336"]; // grün = Success, rot = Error
@@ -174,6 +179,38 @@ export function buildEmployeeTeamHistory(entries: ParsedLogEntry[], selectedUser
 
     return Array.from(historyMap.values())
         .sort((a, b) => b.logtime.getTime() - a.logtime.getTime());
+}
+
+export function buildDailyTeamPostChart(entries: ParsedLogEntry[], selectedUser: string): DailyTeamPostEntry[] {
+    if (!selectedUser) return [];
+
+    const filteredEntries = entries.filter((entry) => parseUserFromTitle(entry.title) === selectedUser.toLowerCase());
+    const teamSet = new Set<string>();
+    filteredEntries.forEach((entry) => {
+        const team = (entry.targetTeam ?? "Unbekannt").trim() || "Unbekannt";
+        teamSet.add(team);
+    });
+
+    const teamNames = Array.from(teamSet).sort((a, b) => a.localeCompare(b));
+    const dateMap = new Map<string, DailyTeamPostEntry>();
+
+    filteredEntries.forEach((entry) => {
+        const date = toDateKey(entry.logtime);
+        const team = (entry.targetTeam ?? "Unbekannt").trim() || "Unbekannt";
+        const day = dateMap.get(date) ?? { date };
+        day[team] = ((day[team] as number) ?? 0) + 1;
+        dateMap.set(date, day);
+    });
+
+    return Array.from(dateMap.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, row]) => {
+            const merged: DailyTeamPostEntry = { date };
+            teamNames.forEach((team) => {
+                merged[team] = Number(row[team] ?? 0);
+            });
+            return merged;
+        });
 }
 
 // ─── Hilfsfunktionen ──────────────────────────────────────────────────────────
@@ -334,6 +371,19 @@ const StatsPage: React.FC = () => {
         () => (selectedEmployee ? buildEmployeeTeamHistory(entries, selectedEmployee.toLowerCase()) : []),
         [entries, selectedEmployee]
     );
+    const dailyTeamPostChart = useMemo(
+        () => (selectedEmployee ? buildDailyTeamPostChart(entries, selectedEmployee.toLowerCase()) : []),
+        [entries, selectedEmployee]
+    );
+    const teamKeys = useMemo(() => {
+        const set = new Set<string>();
+        dailyTeamPostChart.forEach((day) => {
+            Object.keys(day).forEach((key) => {
+                if (key !== "date") set.add(key);
+            });
+        });
+        return Array.from(set).sort((a, b) => a.localeCompare(b));
+    }, [dailyTeamPostChart]);
 
     /** Gesamtsummen */
     const totalUploads = currentEntries.length;
@@ -491,20 +541,29 @@ const StatsPage: React.FC = () => {
 
             {/* ── Charts Row ───────────────────────────────────────────── */}
             <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap", mb: 4 }}>
-                {/* Uploads pro Monat (BarChart) */}
-                <Paper elevation={2} sx={{ p: 2, flex: 2, minWidth: 320 }}>
-                    <Typography variant="h6" gutterBottom>Uploads pro Monat</Typography>
-                    <ResponsiveContainer width="100%" height={280}>
-                        <BarChart data={monthlyData}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="label" />
-                            <YAxis allowDecimals={false} />
-                            <Tooltip />
-                            <Legend />
-                            <Bar dataKey="uploads" name="Uploads" fill="#1976d2" />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </Paper>
+                {selectedEmployee && dailyTeamPostChart.length > 0 && (
+                    <Paper elevation={2} sx={{ p: 2, flex: 2, minWidth: 420 }}>
+                        <Typography variant="h6" gutterBottom>Posts pro Tag nach Team</Typography>
+                        <ResponsiveContainer width="100%" height={320}>
+                            <BarChart data={dailyTeamPostChart}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="date" />
+                                <YAxis allowDecimals={false} />
+                                <Tooltip />
+                                <Legend />
+                                {teamKeys.map((team, index) => (
+                                    <Bar
+                                        key={team}
+                                        dataKey={team}
+                                        name={team}
+                                        stackId="posts"
+                                        fill={['#1976d2', '#2e7d32', '#ed6c02', '#9c27b0', '#d32f2f'][index % 5]}
+                                    />
+                                ))}
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </Paper>
+                )}
 
                 {/* MB pro Monat (LineChart) */}
                 <Paper elevation={2} sx={{ p: 2, flex: 2, minWidth: 320 }}>
