@@ -11,6 +11,7 @@ import { CustomNavigationClient } from "./utils/NavigationClient";
 // Sample app imports
 import { PageLayout } from "./ui-components/PageLayout";
 import TeamsList from "./ui-components/TeamsList";
+import ReportingDashboardPage from "./pages/ReportingDashboardPage";
 import './styles.css';
 
 type AppProps = {
@@ -28,6 +29,7 @@ function App({ pca }: AppProps) {
         <MsalProvider instance={pca}>
             <PageLayout>
                 <Routes>
+                    <Route path="/reporting" element={<ReportingDashboardPage />} />
                     <Route path="*" element={
                         <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
                             <Paper elevation={3} sx={{ p: 3, borderRadius: 2 }}>

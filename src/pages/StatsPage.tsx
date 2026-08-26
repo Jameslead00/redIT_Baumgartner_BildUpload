@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import {
     Container, Paper, Typography, Box, Table, TableBody,
     TableCell, TableContainer, TableHead, TableRow,
-    CircularProgress, Alert, Chip
+    CircularProgress, Alert, Chip, TextField, Autocomplete, Button
 } from "@mui/material";
 import {
     BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
@@ -22,6 +22,7 @@ interface SPLogFields {
     TotalSizeMB?: number;
     Status?: string;
     ErrorMessage?: string;
+    TargetTeam?: string;
 }
 
 /** Geparster Log-Eintrag */
@@ -32,6 +33,7 @@ interface ParsedLogEntry {
     totalSizeMB: number;
     status: "Success" | "Error";
     errorMessage: string;
+    targetTeam: string;
 }
 
 /** Aggregation pro Monat */
@@ -48,9 +50,238 @@ interface StatusData {
     percent: string;
 }
 
+interface TeamBreakdownItem {
+    team: string;
+    count: number;
+}
+
+interface EmployeeUsageSummary {
+    user: string;
+    uploads: number;
+    successfulUploads: number;
+    failedUploads: number;
+    totalMB: number;
+    successRate: number;
+    lastActivity: Date | null;
+    primaryTeam: string;
+    teamBreakdown: TeamBreakdownItem[];
+}
+
+interface EmployeeTeamHistoryEntry {
+    user: string;
+    date: string;
+    team: string;
+    status: "Success" | "Error";
+    totalMB: number;
+    uploads: number;
+    logtime: Date;
+}
+
+interface DailyTeamPostEntry {
+    date: string;
+    [team: string]: string | number;
+}
+
+interface DailyTeamPersonEntry {
+    date: string;
+    [person: string]: string | number;
+}
+
 // ─── Farben für PieChart ──────────────────────────────────────────────────────
 
 const PIE_COLORS = ["#4caf50", "#f44336"]; // grün = Success, rot = Error
+
+export function parseUserFromTitle(title?: string): string {
+    if (!title) return "unknown";
+
+    const match = title.match(/Upload by\s+([^\s]+)$/i) ?? title.match(/\b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/i);
+    if (!match) return "unknown";
+
+    const user = match[1]?.trim();
+    if (!user) return "unknown";
+
+    return user.toLowerCase();
+}
+
+function toDateKey(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+}
+
+export function buildEmployeeUsageSummary(entries: ParsedLogEntry[]): EmployeeUsageSummary[] {
+    const summaryMap = new Map<string, EmployeeUsageSummary>();
+
+    entries.forEach((entry) => {
+        const user = parseUserFromTitle(entry.title);
+        const current: EmployeeUsageSummary = summaryMap.get(user) ?? {
+            user,
+            uploads: 0,
+            successfulUploads: 0,
+            failedUploads: 0,
+            totalMB: 0,
+            successRate: 0,
+            lastActivity: null,
+            primaryTeam: "-",
+            teamBreakdown: [],
+        };
+
+        current.uploads += 1;
+        current.totalMB += entry.totalSizeMB;
+        current.lastActivity = current.lastActivity && current.lastActivity > entry.logtime ? current.lastActivity : entry.logtime;
+
+        if (entry.status === "Success") {
+            current.successfulUploads += 1;
+        } else {
+            current.failedUploads += 1;
+        }
+
+        const team = (entry.targetTeam ?? "Unbekannt").trim() || "Unbekannt";
+        const teamBreakdownMap = new Map(current.teamBreakdown.map((item) => [item.team, item.count]));
+        teamBreakdownMap.set(team, (teamBreakdownMap.get(team) ?? 0) + 1);
+        current.teamBreakdown = Array.from(teamBreakdownMap.entries())
+            .map(([teamName, count]) => ({ team: teamName, count }))
+            .sort((a, b) => b.count - a.count || a.team.localeCompare(b.team));
+        current.primaryTeam = current.teamBreakdown[0]?.team ?? "-";
+
+        summaryMap.set(user, current);
+    });
+
+    return Array.from(summaryMap.values())
+        .map((item) => ({
+            ...item,
+            successRate: item.uploads === 0 ? 0 : Math.round((item.successfulUploads / item.uploads) * 100),
+        }))
+        .sort((a, b) => b.uploads - a.uploads || b.totalMB - a.totalMB);
+}
+
+export function buildEmployeeTeamHistory(entries: ParsedLogEntry[], selectedUser: string): EmployeeTeamHistoryEntry[] {
+    const filteredEntries = entries.filter((entry) => parseUserFromTitle(entry.title) === selectedUser.toLowerCase());
+
+    const historyMap = new Map<string, EmployeeTeamHistoryEntry>();
+
+    filteredEntries.forEach((entry) => {
+        const dateKey = toDateKey(entry.logtime);
+        const team = (entry.targetTeam ?? "Unbekannt").trim() || "Unbekannt";
+        const bundleKey = `${dateKey}::${team}`;
+        const current = historyMap.get(bundleKey) ?? {
+            user: selectedUser.toLowerCase(),
+            date: dateKey,
+            team,
+            status: entry.status,
+            totalMB: 0,
+            uploads: 0,
+            logtime: entry.logtime,
+        };
+
+        current.totalMB += entry.totalSizeMB;
+        current.uploads += 1;
+        current.status = current.status === "Error" || entry.status === "Error" ? "Error" : "Success";
+        current.logtime = current.logtime > entry.logtime ? current.logtime : entry.logtime;
+        historyMap.set(bundleKey, current);
+    });
+
+    return Array.from(historyMap.values())
+        .sort((a, b) => b.logtime.getTime() - a.logtime.getTime());
+}
+
+export function buildDailyTeamPostChart(entries: ParsedLogEntry[], selectedUser: string, maxVisibleTeams = 5): DailyTeamPostEntry[] {
+    if (!selectedUser) return [];
+
+    const filteredEntries = entries.filter((entry) => parseUserFromTitle(entry.title) === selectedUser.toLowerCase());
+    const teamCounts = new Map<string, number>();
+    filteredEntries.forEach((entry) => {
+        const team = (entry.targetTeam ?? "Unbekannt").trim() || "Unbekannt";
+        teamCounts.set(team, (teamCounts.get(team) ?? 0) + 1);
+    });
+
+    const orderedTeams = Array.from(teamCounts.entries())
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([team]) => team);
+    const visibleTeams = orderedTeams.slice(0, maxVisibleTeams);
+    const hiddenTeams = orderedTeams.slice(maxVisibleTeams);
+
+    const dateMap = new Map<string, DailyTeamPostEntry>();
+
+    filteredEntries.forEach((entry) => {
+        const date = toDateKey(entry.logtime);
+        const team = (entry.targetTeam ?? "Unbekannt").trim() || "Unbekannt";
+        const day = dateMap.get(date) ?? { date };
+
+        if (visibleTeams.includes(team)) {
+            day[team] = ((day[team] as number) ?? 0) + 1;
+        } else {
+            day.Sonstige = ((day.Sonstige as number) ?? 0) + 1;
+        }
+
+        dateMap.set(date, day);
+    });
+
+    return Array.from(dateMap.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, row]) => {
+            const merged: DailyTeamPostEntry = { date };
+            visibleTeams.forEach((team) => {
+                merged[team] = Number(row[team] ?? 0);
+            });
+            if (hiddenTeams.length > 0) {
+                merged.Sonstige = Number(row.Sonstige ?? 0);
+            }
+            return merged;
+        });
+}
+
+export function buildDailyTeamPersonChart(entries: ParsedLogEntry[], selectedTeam: string, maxVisiblePeople = 6): DailyTeamPersonEntry[] {
+    if (!selectedTeam) return [];
+
+    const normalizedTeam = selectedTeam.trim();
+    const filteredEntries = entries.filter((entry) => {
+        const team = (entry.targetTeam ?? "Unbekannt").trim() || "Unbekannt";
+        return team.toLowerCase() === normalizedTeam.toLowerCase();
+    });
+
+    const personCounts = new Map<string, number>();
+    filteredEntries.forEach((entry) => {
+        const user = parseUserFromTitle(entry.title);
+        personCounts.set(user, (personCounts.get(user) ?? 0) + 1);
+    });
+
+    const orderedPeople = Array.from(personCounts.entries())
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([person]) => person);
+    const visiblePeople = orderedPeople.slice(0, maxVisiblePeople);
+    const hiddenPeople = orderedPeople.slice(maxVisiblePeople);
+
+    const dateMap = new Map<string, DailyTeamPersonEntry>();
+
+    filteredEntries.forEach((entry) => {
+        const date = toDateKey(entry.logtime);
+        const person = parseUserFromTitle(entry.title);
+        const day = dateMap.get(date) ?? { date };
+
+        if (visiblePeople.includes(person)) {
+            day[person] = ((day[person] as number) ?? 0) + 1;
+        } else {
+            day.Sonstige = ((day.Sonstige as number) ?? 0) + 1;
+        }
+
+        dateMap.set(date, day);
+    });
+
+    return Array.from(dateMap.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, row]) => {
+            const merged: DailyTeamPersonEntry = { date };
+            visiblePeople.forEach((person) => {
+                merged[person] = Number(row[person] ?? 0);
+            });
+            if (hiddenPeople.length > 0) {
+                merged.Sonstige = Number(row.Sonstige ?? 0);
+            }
+            return merged;
+        });
+}
 
 // ─── Hilfsfunktionen ──────────────────────────────────────────────────────────
 
@@ -58,7 +289,7 @@ const PIE_COLORS = ["#4caf50", "#f44336"]; // grün = Success, rot = Error
  * Holt alle Items aus der SharePoint-Liste inkl. Pagination (nextLink).
  */
 async function fetchAllLogItems(accessToken: string): Promise<SPLogFields[]> {
-    const fields = "Logtime,TotalSizeMB,Status,PhotoCount,Title,ErrorMessage";
+    const fields = "Logtime,TotalSizeMB,Status,PhotoCount,Title,ErrorMessage,TargetTeam";
     let url: string | null =
         `https://graph.microsoft.com/v1.0/sites/${LOG_SITE_ID}/lists/${LOG_LIST_ID}/items?expand=fields(select=${fields})&$top=200`;
 
@@ -113,6 +344,10 @@ const StatsPage: React.FC = () => {
     const [entries, setEntries] = useState<ParsedLogEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [employeeSearch, setEmployeeSearch] = useState("");
+    const [selectedEmployee, setSelectedEmployee] = useState("");
+    const [teamSearch, setTeamSearch] = useState("");
+    const [selectedTeam, setSelectedTeam] = useState("");
 
     useEffect(() => {
         if (!isAuthenticated || accounts.length === 0) {
@@ -141,7 +376,8 @@ const StatsPage: React.FC = () => {
                     photoCount: f.PhotoCount ?? 0,
                     totalSizeMB: f.TotalSizeMB ?? 0,
                     status: f.Status === "Error" ? "Error" : "Success",
-                    errorMessage: f.ErrorMessage ?? ""
+                    errorMessage: f.ErrorMessage ?? "",
+                    targetTeam: f.TargetTeam ?? "Unbekannt"
                 }));
 
                 // Nach Datum absteigend sortieren
@@ -161,10 +397,30 @@ const StatsPage: React.FC = () => {
 
     // ── Aggregationen ─────────────────────────────────────────────────────────
 
+    const employeeUsage = useMemo(() => buildEmployeeUsageSummary(entries), [entries]);
+    const employeeOptions = useMemo(() => employeeUsage.map((row) => row.user), [employeeUsage]);
+    const teamOptions = useMemo(() => {
+        const uniqueTeams = new Set(
+            entries
+                .map((entry) => (entry.targetTeam ?? "Unbekannt").trim() || "Unbekannt")
+                .filter(Boolean)
+        );
+        return Array.from(uniqueTeams).sort((a, b) => a.localeCompare(b));
+    }, [entries]);
+    const currentEntries = useMemo(() => {
+        if (selectedEmployee) {
+            return entries.filter((entry) => parseUserFromTitle(entry.title) === selectedEmployee.toLowerCase());
+        }
+        if (selectedTeam) {
+            return entries.filter((entry) => ((entry.targetTeam ?? "Unbekannt").trim() || "Unbekannt").toLowerCase() === selectedTeam.toLowerCase());
+        }
+        return entries;
+    }, [entries, selectedEmployee, selectedTeam]);
+
     /** Uploads pro Monat + MB pro Monat */
     const monthlyData: MonthlyData[] = useMemo(() => {
         const map = new Map<string, { uploads: number; totalMB: number }>();
-        entries.forEach((e) => {
+        currentEntries.forEach((e) => {
             const key = toMonthKey(e.logtime);
             const existing = map.get(key) ?? { uploads: 0, totalMB: 0 };
             existing.uploads += 1;
@@ -179,29 +435,73 @@ const StatsPage: React.FC = () => {
                 uploads: v.uploads,
                 totalMB: Math.round(v.totalMB * 100) / 100
             }));
-    }, [entries]);
+    }, [currentEntries]);
 
     /** Success vs Fail Counts + Prozent */
     const statusData: StatusData[] = useMemo(() => {
-        const total = entries.length;
+        const total = currentEntries.length;
         if (total === 0) return [];
-        const successCount = entries.filter((e) => e.status === "Success").length;
+        const successCount = currentEntries.filter((e) => e.status === "Success").length;
         const errorCount = total - successCount;
         return [
             { name: "Success", value: successCount, percent: ((successCount / total) * 100).toFixed(1) },
             { name: "Error", value: errorCount, percent: ((errorCount / total) * 100).toFixed(1) }
         ];
-    }, [entries]);
+    }, [currentEntries]);
+    const selectedEmployeeSummary = useMemo(
+        () => employeeUsage.find((row) => row.user === selectedEmployee.toLowerCase()) ?? null,
+        [employeeUsage, selectedEmployee]
+    );
+    const selectedEmployeeHistory = useMemo(
+        () => (selectedEmployee ? buildEmployeeTeamHistory(entries, selectedEmployee.toLowerCase()) : []),
+        [entries, selectedEmployee]
+    );
+    const dailyTeamPostChart = useMemo(
+        () => (selectedEmployee ? buildDailyTeamPostChart(entries, selectedEmployee.toLowerCase()) : []),
+        [entries, selectedEmployee]
+    );
+    const dailyTeamPersonChart = useMemo(
+        () => (selectedTeam ? buildDailyTeamPersonChart(entries, selectedTeam) : []),
+        [entries, selectedTeam]
+    );
+    const activeChartData = selectedEmployee ? dailyTeamPostChart : dailyTeamPersonChart;
+    const chartSeriesKeys = useMemo(() => {
+        const set = new Set<string>();
+        activeChartData.forEach((day) => {
+            Object.keys(day).forEach((key) => {
+                if (key !== "date") set.add(key);
+            });
+        });
+        return Array.from(set).sort((a, b) => a.localeCompare(b));
+    }, [activeChartData]);
+    const chartLegendTitle = selectedEmployee ? "Teams" : "Personen";
+    const chartTitle = selectedEmployee ? "Posts pro Tag nach Team" : `Posts pro Tag nach Person im Team ${selectedTeam}`;
 
     /** Gesamtsummen */
-    const totalUploads = entries.length;
+    const totalUploads = currentEntries.length;
     const totalMB = useMemo(
-        () => Math.round(entries.reduce((sum, e) => sum + e.totalSizeMB, 0) * 100) / 100,
-        [entries]
+        () => Math.round(currentEntries.reduce((sum, e) => sum + e.totalSizeMB, 0) * 100) / 100,
+        [currentEntries]
     );
 
     /** Letzte 10 Einträge */
-    const recentEntries = useMemo(() => entries.slice(0, 10), [entries]);
+    const recentEntries = useMemo(() => currentEntries.slice(0, 10), [currentEntries]);
+
+    const filteredEmployeeUsage = useMemo(() => {
+        const query = employeeSearch.trim().toLowerCase();
+        const base = selectedEmployee ? employeeUsage.filter((row) => row.user === selectedEmployee.toLowerCase()) : employeeUsage;
+        if (!query) return base;
+        return base.filter((row) => row.user.toLowerCase().includes(query));
+    }, [employeeSearch, employeeUsage, selectedEmployee]);
+    const activeUsers = selectedEmployee || selectedTeam ? (selectedEmployee ? 1 : new Set(currentEntries.map((entry) => parseUserFromTitle(entry.title))).size) : employeeUsage.length;
+    const successfulUploads = currentEntries.filter((entry) => entry.status === "Success").length;
+    const failedUploads = currentEntries.filter((entry) => entry.status === "Error").length;
+    const employeeLeader = selectedEmployeeSummary ?? employeeUsage[0] ?? null;
+    const activeFilterLabel = selectedEmployee
+        ? `Gefiltert auf Mitarbeiter: ${selectedEmployee}`
+        : selectedTeam
+            ? `Gefiltert auf Team: ${selectedTeam}`
+            : "";
 
     // ── Render ────────────────────────────────────────────────────────────────
 
@@ -245,12 +545,21 @@ const StatsPage: React.FC = () => {
             <Typography variant="h4" gutterBottom>
                 Upload-Statistiken
             </Typography>
+            {activeFilterLabel && (
+                <Alert severity="info" sx={{ mb: 3 }}>
+                    {activeFilterLabel}{selectedEmployeeSummary ? ` · ${selectedEmployeeSummary.uploads} Uploads` : ""}
+                </Alert>
+            )}
 
             {/* ── Gesamtsummen ──────────────────────────────────────────── */}
             <Box sx={{ display: "flex", gap: 2, mb: 3, flexWrap: "wrap" }}>
                 <Paper elevation={2} sx={{ p: 2, flex: 1, minWidth: 160, textAlign: "center" }}>
                     <Typography variant="h5">{totalUploads}</Typography>
                     <Typography variant="body2" color="text.secondary">Uploads gesamt</Typography>
+                </Paper>
+                <Paper elevation={2} sx={{ p: 2, flex: 1, minWidth: 160, textAlign: "center" }}>
+                    <Typography variant="h5">{activeUsers}</Typography>
+                    <Typography variant="body2" color="text.secondary">Aktive Nutzer</Typography>
                 </Paper>
                 <Paper elevation={2} sx={{ p: 2, flex: 1, minWidth: 160, textAlign: "center" }}>
                     <Typography variant="h5">{totalMB} MB</Typography>
@@ -264,23 +573,136 @@ const StatsPage: React.FC = () => {
                 </Paper>
             </Box>
 
+            <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap", mb: 4 }}>
+                <Paper elevation={2} sx={{ p: 2, flex: 1, minWidth: 200 }}>
+                    <Typography variant="h6" gutterBottom>Top Nutzer</Typography>
+                    <Typography variant="body2" color="text.secondary">Leader</Typography>
+                    <Typography variant="h5">{employeeLeader?.user ?? "-"}</Typography>
+                    <Typography variant="body2">{employeeLeader?.uploads ?? 0} Uploads · {employeeLeader?.totalMB ?? 0} MB</Typography>
+                </Paper>
+                <Paper elevation={2} sx={{ p: 2, flex: 1, minWidth: 200 }}>
+                    <Typography variant="h6" gutterBottom>Erfolgsquote</Typography>
+                    <Typography variant="h5">{successfulUploads}</Typography>
+                    <Typography variant="body2" color="text.secondary">Erfolgreiche Uploads</Typography>
+                </Paper>
+                <Paper elevation={2} sx={{ p: 2, flex: 1, minWidth: 200 }}>
+                    <Typography variant="h6" gutterBottom>Fehler</Typography>
+                    <Typography variant="h5">{failedUploads}</Typography>
+                    <Typography variant="body2" color="text.secondary">Fehlgeschlagene Uploads</Typography>
+                </Paper>
+            </Box>
+
+            <Paper elevation={2} sx={{ p: 2, mb: 4 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
+                    <Typography variant="h6" sx={{ mb: 0 }}>Mitarbeiter / Team filtern</Typography>
+                    <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => {
+                            setSelectedEmployee("");
+                            setSelectedTeam("");
+                            setEmployeeSearch("");
+                            setTeamSearch("");
+                        }}
+                        sx={{ minWidth: "auto" }}
+                    >
+                        Zurücksetzen
+                    </Button>
+                </Box>
+
+                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2, mt: 2 }}>
+                    <Autocomplete
+                        options={employeeOptions}
+                        freeSolo
+                        value={selectedEmployee || null}
+                        inputValue={employeeSearch}
+                        onInputChange={(_event, newInputValue) => {
+                            setEmployeeSearch(newInputValue);
+                            if (!newInputValue) {
+                                setSelectedEmployee("");
+                            }
+                        }}
+                        onChange={(_event, newValue) => {
+                            const nextValue = typeof newValue === "string" ? newValue : newValue ?? "";
+                            setSelectedEmployee(nextValue.toLowerCase());
+                            setSelectedTeam("");
+                            setEmployeeSearch(nextValue);
+                            setTeamSearch("");
+                        }}
+                        renderInput={(params) => (
+                            <TextField
+                                {...params}
+                                size="small"
+                                label="Mitarbeiter auswählen"
+                                placeholder="Name oder E-Mail eingeben"
+                            />
+                        )}
+                    />
+
+                    <Autocomplete
+                        options={teamOptions}
+                        freeSolo
+                        value={selectedTeam || null}
+                        inputValue={teamSearch}
+                        onInputChange={(_event, newInputValue) => {
+                            setTeamSearch(newInputValue);
+                            if (!newInputValue) {
+                                setSelectedTeam("");
+                            }
+                        }}
+                        onChange={(_event, newValue) => {
+                            const nextValue = typeof newValue === "string" ? newValue : newValue ?? "";
+                            setSelectedTeam(nextValue);
+                            setSelectedEmployee("");
+                            setTeamSearch(nextValue);
+                            setEmployeeSearch("");
+                        }}
+                        renderInput={(params) => (
+                            <TextField
+                                {...params}
+                                size="small"
+                                label="Team auswählen"
+                                placeholder="Team eingeben"
+                            />
+                        )}
+                    />
+                </Box>
+            </Paper>
+
             {/* ── Charts Row ───────────────────────────────────────────── */}
             <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap", mb: 4 }}>
-                {/* Uploads pro Monat (BarChart) */}
-                <Paper elevation={2} sx={{ p: 2, flex: 2, minWidth: 320 }}>
-                    <Typography variant="h6" gutterBottom>Uploads pro Monat</Typography>
-                    <ResponsiveContainer width="100%" height={280}>
-                        <BarChart data={monthlyData}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="label" />
-                            <YAxis allowDecimals={false} />
-                            <Tooltip />
-                            <Legend />
-                            <Bar dataKey="uploads" name="Uploads" fill="#1976d2" />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </Paper>
+                {(selectedEmployee || selectedTeam) && activeChartData.length > 0 && (
+                    <Paper elevation={3} sx={{ p: 2, width: "100%", minWidth: 0 }}>
+                        <Typography variant="h6" gutterBottom>{chartTitle}</Typography>
+                        <ResponsiveContainer width="100%" height={420}>
+                            <BarChart data={activeChartData}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="date" />
+                                <YAxis allowDecimals={false} />
+                                <Tooltip />
+                                {chartSeriesKeys.map((entry, index) => (
+                                    <Bar
+                                        key={entry}
+                                        dataKey={entry}
+                                        name={entry}
+                                        fill={['#1976d2', '#2e7d32', '#ed6c02', '#9c27b0', '#d32f2f', '#607d8b', '#ef5350', '#8bc34a'][index % 8]}
+                                    />
+                                ))}
+                            </BarChart>
+                        </ResponsiveContainer>
+                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5, mt: 2, maxHeight: 120, overflowY: "auto", pr: 1 }}>
+                            {chartSeriesKeys.map((entry, index) => (
+                                <Box key={entry} sx={{ display: "flex", alignItems: "center", gap: 1, fontSize: 13, minWidth: 150 }}>
+                                    <Box sx={{ width: 12, height: 12, backgroundColor: ['#1976d2', '#2e7d32', '#ed6c02', '#9c27b0', '#d32f2f', '#607d8b', '#ef5350', '#8bc34a'][index % 8], borderRadius: 0.5 }} />
+                                    <Box sx={{ whiteSpace: "normal", wordBreak: "break-word" }}>{entry}</Box>
+                                </Box>
+                            ))}
+                        </Box>
+                    </Paper>
+                )}
+            </Box>
 
+            <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap", mb: 4 }}>
                 {/* MB pro Monat (LineChart) */}
                 <Paper elevation={2} sx={{ p: 2, flex: 2, minWidth: 320 }}>
                     <Typography variant="h6" gutterBottom>Datenvolumen pro Monat (MB)</Typography>
@@ -320,6 +742,102 @@ const StatsPage: React.FC = () => {
                     </ResponsiveContainer>
                 </Paper>
             </Box>
+
+            <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap", mb: 4 }}>
+                <Paper elevation={2} sx={{ p: 2, flex: 1, minWidth: 260 }}>
+                    <Typography variant="h6" gutterBottom>Top 5 Mitarbeiter</Typography>
+                    <Table size="small">
+                        <TableHead>
+                            <TableRow>
+                                <TableCell>Mitarbeiter</TableCell>
+                                <TableCell align="right">Uploads</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {employeeUsage.slice(0, 5).map((row) => (
+                                <TableRow key={row.user}>
+                                    <TableCell>{row.user}</TableCell>
+                                    <TableCell align="right">{row.uploads}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </Paper>
+            </Box>
+
+            <Paper elevation={2} sx={{ p: 2, mb: 4 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 2, mb: 2, flexWrap: "wrap" }}>
+                    <Typography variant="h6" gutterBottom sx={{ mb: 0 }}>Mitarbeiter-Übersicht</Typography>
+                </Box>
+                <TableContainer>
+                    <Table size="small">
+                        <TableHead>
+                            <TableRow>
+                                <TableCell>Mitarbeiter</TableCell>
+                                <TableCell>Hauptteam</TableCell>
+                                <TableCell align="right">Uploads</TableCell>
+                                <TableCell align="right">Erfolgreich</TableCell>
+                                <TableCell align="right">Fehler</TableCell>
+                                <TableCell align="right">Erfolgsrate</TableCell>
+                                <TableCell align="right">MB</TableCell>
+                                <TableCell>Letzte Aktivität</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {filteredEmployeeUsage.map((row) => (
+                                <TableRow key={row.user}>
+                                    <TableCell>{row.user}</TableCell>
+                                    <TableCell>{row.primaryTeam}</TableCell>
+                                    <TableCell align="right">{row.uploads}</TableCell>
+                                    <TableCell align="right">{row.successfulUploads}</TableCell>
+                                    <TableCell align="right">{row.failedUploads}</TableCell>
+                                    <TableCell align="right">{row.successRate}%</TableCell>
+                                    <TableCell align="right">{row.totalMB.toFixed(1)}</TableCell>
+                                    <TableCell>
+                                        {row.lastActivity ? row.lastActivity.toLocaleDateString("de-CH") : "-"}
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+            </Paper>
+
+            {selectedEmployeeHistory.length > 0 && (
+                <Paper elevation={2} sx={{ p: 2, mb: 4 }}>
+                    <Typography variant="h6" gutterBottom>Team-/Datumsverlauf für {selectedEmployee}</Typography>
+                    <TableContainer>
+                        <Table size="small">
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell>Datum</TableCell>
+                                    <TableCell>Team</TableCell>
+                                    <TableCell align="right">Anzahl Posts</TableCell>
+                                    <TableCell align="right">MB</TableCell>
+                                    <TableCell>Status</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {selectedEmployeeHistory.map((item) => (
+                                    <TableRow key={`${item.user}-${item.date}-${item.team}`}>
+                                        <TableCell>{item.date}</TableCell>
+                                        <TableCell>{item.team}</TableCell>
+                                        <TableCell align="right">{item.uploads}</TableCell>
+                                        <TableCell align="right">{item.totalMB.toFixed(1)}</TableCell>
+                                        <TableCell>
+                                            <Chip
+                                                label={item.status}
+                                                size="small"
+                                                color={item.status === "Success" ? "success" : "error"}
+                                            />
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                </Paper>
+            )}
 
             {/* ── Letzte 10 Einträge ───────────────────────────────────── */}
             <Paper elevation={2} sx={{ p: 2 }}>

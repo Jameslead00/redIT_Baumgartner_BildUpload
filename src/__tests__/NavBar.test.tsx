@@ -1,7 +1,16 @@
 import React from 'react';
 import { render, screen, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import { MemoryRouter } from 'react-router-dom';
 import NavBar from '../ui-components/NavBar';
+
+const msalReact = require('@azure/msal-react');
+
+jest.mock('@azure/msal-react', () => ({
+  useMsal: jest.fn(),
+  useAccount: jest.fn(),
+  useIsAuthenticated: jest.fn(),
+}));
 
 // Mock child components
 jest.mock('../ui-components/WelcomeName', () => ({
@@ -17,7 +26,8 @@ jest.mock('../ui-components/SignInSignOutButton', () => ({
 // Mock MUI Icons to easily verify which one is rendered
 jest.mock("@mui/icons-material", () => ({
   Wifi: () => <span data-testid="wifi-icon">WifiIcon</span>,
-  WifiOff: () => <span data-testid="wifi-off-icon">WifiOffIcon</span>
+  WifiOff: () => <span data-testid="wifi-off-icon">WifiOffIcon</span>,
+  BarChartOutlined: () => <span data-testid="bar-chart-icon">BarChartIcon</span>
 }));
 
 // Mock MUI Tooltip: Wir rendern einfach ein Div mit dem Title-Attribut.
@@ -35,15 +45,52 @@ jest.mock("@mui/material", () => {
 });
 
 describe('NavBar', () => {
+  beforeEach(() => {
+    msalReact.useMsal.mockReturnValue({ accounts: [{ username: 'sbaumgartner@baumgartnerfenster.ch' }] });
+    msalReact.useAccount.mockReturnValue({ username: 'sbaumgartner@baumgartnerfenster.ch', name: 'S. Baumgartner' });
+    msalReact.useIsAuthenticated.mockReturnValue(true);
+  });
+
   test('renders title and children', () => {
-    render(<NavBar />);
+    render(
+      <MemoryRouter>
+        <NavBar />
+      </MemoryRouter>
+    );
     expect(screen.getByText(/Baumgartner Fenster/i)).toBeInTheDocument();
     expect(screen.getByTestId('mock-welcome')).toBeInTheDocument();
     expect(screen.getByTestId('mock-signin')).toBeInTheDocument();
   });
 
+  test('renders reporting dashboard link for allowlisted users', () => {
+    render(
+      <MemoryRouter>
+        <NavBar />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole('link', { name: /reporting dashboard/i })).toHaveAttribute('href', '/reporting');
+  });
+
+  test('hides the reporting dashboard link for non-allowlisted users', () => {
+    msalReact.useMsal.mockReturnValue({ accounts: [{ username: 'someone@example.com' }] });
+    msalReact.useAccount.mockReturnValue({ username: 'someone@example.com', name: 'Someone Else' });
+
+    render(
+      <MemoryRouter>
+        <NavBar />
+      </MemoryRouter>
+    );
+
+    expect(screen.queryByRole('link', { name: /reporting dashboard/i })).not.toBeInTheDocument();
+  });
+
   test('updates icon and tooltip on network status change', async () => {
-    render(<NavBar />);
+    render(
+      <MemoryRouter>
+        <NavBar />
+      </MemoryRouter>
+    );
     
     // Initial state (Online by default in JSDOM)
     expect(screen.getByTestId('wifi-icon')).toBeInTheDocument();
@@ -76,7 +123,11 @@ describe('NavBar', () => {
     // Mock navigator.onLine to false
     Object.defineProperty(window.navigator, 'onLine', { value: false, configurable: true });
     
-    render(<NavBar />);
+    render(
+      <MemoryRouter>
+        <NavBar />
+      </MemoryRouter>
+    );
     expect(screen.getByTestId('wifi-off-icon')).toBeInTheDocument();
     expect(screen.getByTestId('mock-tooltip')).toHaveAttribute('title', 'Offline');
     
@@ -86,7 +137,11 @@ describe('NavBar', () => {
 
   test('removes event listeners on unmount', () => {
     const removeSpy = jest.spyOn(window, 'removeEventListener');
-    const { unmount } = render(<NavBar />);
+    const { unmount } = render(
+      <MemoryRouter>
+        <NavBar />
+      </MemoryRouter>
+    );
     
     unmount();
     
