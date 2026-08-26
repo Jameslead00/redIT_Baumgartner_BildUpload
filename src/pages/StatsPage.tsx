@@ -288,6 +288,13 @@ const StatsPage: React.FC = () => {
 
     // ── Aggregationen ─────────────────────────────────────────────────────────
 
+    const employeeUsage = useMemo(() => buildEmployeeUsageSummary(entries), [entries]);
+    const employeeOptions = useMemo(() => employeeUsage.map((row) => row.user), [employeeUsage]);
+    const currentEntries = useMemo(() => {
+        if (!selectedEmployee) return entries;
+        return entries.filter((entry) => parseUserFromTitle(entry.title) === selectedEmployee.toLowerCase());
+    }, [entries, selectedEmployee]);
+
     /** Uploads pro Monat + MB pro Monat */
     const monthlyData: MonthlyData[] = useMemo(() => {
         const map = new Map<string, { uploads: number; totalMB: number }>();
@@ -319,13 +326,6 @@ const StatsPage: React.FC = () => {
             { name: "Error", value: errorCount, percent: ((errorCount / total) * 100).toFixed(1) }
         ];
     }, [currentEntries]);
-
-    const employeeUsage = useMemo(() => buildEmployeeUsageSummary(entries), [entries]);
-    const employeeOptions = useMemo(() => employeeUsage.map((row) => row.user), [employeeUsage]);
-    const currentEntries = useMemo(() => {
-        if (!selectedEmployee) return entries;
-        return entries.filter((entry) => parseUserFromTitle(entry.title) === selectedEmployee.toLowerCase());
-    }, [entries, selectedEmployee]);
     const selectedEmployeeSummary = useMemo(
         () => employeeUsage.find((row) => row.user === selectedEmployee.toLowerCase()) ?? null,
         [employeeUsage, selectedEmployee]
