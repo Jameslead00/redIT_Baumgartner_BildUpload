@@ -48,9 +48,67 @@ interface StatusData {
     percent: string;
 }
 
+interface EmployeeUsageSummary {
+    user: string;
+    uploads: number;
+    successfulUploads: number;
+    failedUploads: number;
+    totalMB: number;
+    successRate: number;
+    lastActivity: Date | null;
+}
+
 // ─── Farben für PieChart ──────────────────────────────────────────────────────
 
 const PIE_COLORS = ["#4caf50", "#f44336"]; // grün = Success, rot = Error
+
+export function parseUserFromTitle(title?: string): string {
+    if (!title) return "unknown";
+
+    const match = title.match(/Upload by\s+([^\s]+)$/i) ?? title.match(/\b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/i);
+    if (!match) return "unknown";
+
+    const user = match[1]?.trim();
+    if (!user) return "unknown";
+
+    return user.toLowerCase();
+}
+
+export function buildEmployeeUsageSummary(entries: ParsedLogEntry[]): EmployeeUsageSummary[] {
+    const summaryMap = new Map<string, EmployeeUsageSummary>();
+
+    entries.forEach((entry) => {
+        const user = parseUserFromTitle(entry.title);
+        const current = summaryMap.get(user) ?? {
+            user,
+            uploads: 0,
+            successfulUploads: 0,
+            failedUploads: 0,
+            totalMB: 0,
+            successRate: 0,
+            lastActivity: null,
+        };
+
+        current.uploads += 1;
+        current.totalMB += entry.totalSizeMB;
+        current.lastActivity = current.lastActivity && current.lastActivity > entry.logtime ? current.lastActivity : entry.logtime;
+
+        if (entry.status === "Success") {
+            current.successfulUploads += 1;
+        } else {
+            current.failedUploads += 1;
+        }
+
+        summaryMap.set(user, current);
+    });
+
+    return Array.from(summaryMap.values())
+        .map((item) => ({
+            ...item,
+            successRate: item.uploads === 0 ? 0 : Math.round((item.successfulUploads / item.uploads) * 100),
+        }))
+        .sort((a, b) => b.uploads - a.uploads || b.totalMB - a.totalMB);
+}
 
 // ─── Hilfsfunktionen ──────────────────────────────────────────────────────────
 
@@ -203,6 +261,25 @@ const StatsPage: React.FC = () => {
     /** Letzte 10 Einträge */
     const recentEntries = useMemo(() => entries.slice(0, 10), [entries]);
 
+    /** Employee usage overview */
+    const employeeUsage = useMemo(() => buildEmployeeUsageSummary(entries), [entries]);
+    const activeUsers = employeeUsage.length;
+    const successfulUploads = entries.filter((entry) => entry.status === "Success").length;
+    const failedUploads = entries.filter((entry) => entry.status === "Error").length;
+    const employeeLeader = employeeUsage[0];
+    const monthlyActiveUsers = useMemo(() => {
+        const map = new Map<string, Set<string>>();
+        entries.forEach((entry) => {
+            const key = toMonthKey(entry.logtime);
+            const users = map.get(key) ?? new Set<string>();
+            users.add(parseUserFromTitle(entry.title));
+            map.set(key, users);
+        });
+        return Array.from(map.entries())
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([label, users]) => ({ label, activeUsers: users.size }));
+    }, [entries]);
+
     // ── Render ────────────────────────────────────────────────────────────────
 
     if (!isAuthenticated) {
@@ -253,6 +330,10 @@ const StatsPage: React.FC = () => {
                     <Typography variant="body2" color="text.secondary">Uploads gesamt</Typography>
                 </Paper>
                 <Paper elevation={2} sx={{ p: 2, flex: 1, minWidth: 160, textAlign: "center" }}>
+                    <Typography variant="h5">{activeUsers}</Typography>
+                    <Typography variant="body2" color="text.secondary">Aktive Nutzer</Typography>
+                </Paper>
+                <Paper elevation={2} sx={{ p: 2, flex: 1, minWidth: 160, textAlign: "center" }}>
                     <Typography variant="h5">{totalMB} MB</Typography>
                     <Typography variant="body2" color="text.secondary">Datenvolumen gesamt</Typography>
                 </Paper>
@@ -261,6 +342,25 @@ const StatsPage: React.FC = () => {
                         {statusData.find((s) => s.name === "Success")?.percent ?? 0}%
                     </Typography>
                     <Typography variant="body2" color="text.secondary">Erfolgsrate</Typography>
+                </Paper>
+            </Box>
+
+            <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap", mb: 4 }}>
+                <Paper elevation={2} sx={{ p: 2, flex: 1, minWidth: 200 }}>
+                    <Typography variant="h6" gutterBottom>Top Nutzer</Typography>
+                    <Typography variant="body2" color="text.secondary">Leader</Typography>
+                    <Typography variant="h5">{employeeLeader?.user ?? "-"}</Typography>
+                    <Typography variant="body2">{employeeLeader?.uploads ?? 0} Uploads · {employeeLeader?.totalMB ?? 0} MB</Typography>
+                </Paper>
+                <Paper elevation={2} sx={{ p: 2, flex: 1, minWidth: 200 }}>
+                    <Typography variant="h6" gutterBottom>Erfolgsquote</Typography>
+                    <Typography variant="h5">{successfulUploads}</Typography>
+                    <Typography variant="body2" color="text.secondary">Erfolgreiche Uploads</Typography>
+                </Paper>
+                <Paper elevation={2} sx={{ p: 2, flex: 1, minWidth: 200 }}>
+                    <Typography variant="h6" gutterBottom>Fehler</Typography>
+                    <Typography variant="h5">{failedUploads}</Typography>
+                    <Typography variant="body2" color="text.secondary">Fehlgeschlagene Uploads</Typography>
                 </Paper>
             </Box>
 
@@ -320,6 +420,75 @@ const StatsPage: React.FC = () => {
                     </ResponsiveContainer>
                 </Paper>
             </Box>
+
+            <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap", mb: 4 }}>
+                <Paper elevation={2} sx={{ p: 2, flex: 2, minWidth: 320 }}>
+                    <Typography variant="h6" gutterBottom>Aktive Nutzer pro Monat</Typography>
+                    <ResponsiveContainer width="100%" height={260}>
+                        <BarChart data={monthlyActiveUsers}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="label" />
+                            <YAxis allowDecimals={false} />
+                            <Tooltip />
+                            <Bar dataKey="activeUsers" name="Aktive Nutzer" fill="#9c27b0" />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </Paper>
+
+                <Paper elevation={2} sx={{ p: 2, flex: 1, minWidth: 260 }}>
+                    <Typography variant="h6" gutterBottom>Top 5 Mitarbeiter</Typography>
+                    <Table size="small">
+                        <TableHead>
+                            <TableRow>
+                                <TableCell>Mitarbeiter</TableCell>
+                                <TableCell align="right">Uploads</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {employeeUsage.slice(0, 5).map((row) => (
+                                <TableRow key={row.user}>
+                                    <TableCell>{row.user}</TableCell>
+                                    <TableCell align="right">{row.uploads}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </Paper>
+            </Box>
+
+            <Paper elevation={2} sx={{ p: 2, mb: 4 }}>
+                <Typography variant="h6" gutterBottom>Mitarbeiter-Übersicht</Typography>
+                <TableContainer>
+                    <Table size="small">
+                        <TableHead>
+                            <TableRow>
+                                <TableCell>Mitarbeiter</TableCell>
+                                <TableCell align="right">Uploads</TableCell>
+                                <TableCell align="right">Erfolgreich</TableCell>
+                                <TableCell align="right">Fehler</TableCell>
+                                <TableCell align="right">Erfolgsrate</TableCell>
+                                <TableCell align="right">MB</TableCell>
+                                <TableCell>Letzte Aktivität</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {employeeUsage.map((row) => (
+                                <TableRow key={row.user}>
+                                    <TableCell>{row.user}</TableCell>
+                                    <TableCell align="right">{row.uploads}</TableCell>
+                                    <TableCell align="right">{row.successfulUploads}</TableCell>
+                                    <TableCell align="right">{row.failedUploads}</TableCell>
+                                    <TableCell align="right">{row.successRate}%</TableCell>
+                                    <TableCell align="right">{row.totalMB.toFixed(1)}</TableCell>
+                                    <TableCell>
+                                        {row.lastActivity ? row.lastActivity.toLocaleDateString("de-CH") : "-"}
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+            </Paper>
 
             {/* ── Letzte 10 Einträge ───────────────────────────────────── */}
             <Paper elevation={2} sx={{ p: 2 }}>
