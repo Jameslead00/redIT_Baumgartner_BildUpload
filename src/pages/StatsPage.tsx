@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import {
     Container, Paper, Typography, Box, Table, TableBody,
     TableCell, TableContainer, TableHead, TableRow,
-    CircularProgress, Alert, Chip
+    CircularProgress, Alert, Chip, TextField
 } from "@mui/material";
 import {
     BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
@@ -22,6 +22,7 @@ interface SPLogFields {
     TotalSizeMB?: number;
     Status?: string;
     ErrorMessage?: string;
+    TargetTeam?: string;
 }
 
 /** Geparster Log-Eintrag */
@@ -32,6 +33,7 @@ interface ParsedLogEntry {
     totalSizeMB: number;
     status: "Success" | "Error";
     errorMessage: string;
+    targetTeam: string;
 }
 
 /** Aggregation pro Monat */
@@ -48,6 +50,11 @@ interface StatusData {
     percent: string;
 }
 
+interface TeamBreakdownItem {
+    team: string;
+    count: number;
+}
+
 interface EmployeeUsageSummary {
     user: string;
     uploads: number;
@@ -56,6 +63,8 @@ interface EmployeeUsageSummary {
     totalMB: number;
     successRate: number;
     lastActivity: Date | null;
+    primaryTeam: string;
+    teamBreakdown: TeamBreakdownItem[];
 }
 
 // ─── Farben für PieChart ──────────────────────────────────────────────────────
@@ -116,7 +125,7 @@ export function buildEmployeeUsageSummary(entries: ParsedLogEntry[]): EmployeeUs
  * Holt alle Items aus der SharePoint-Liste inkl. Pagination (nextLink).
  */
 async function fetchAllLogItems(accessToken: string): Promise<SPLogFields[]> {
-    const fields = "Logtime,TotalSizeMB,Status,PhotoCount,Title,ErrorMessage";
+    const fields = "Logtime,TotalSizeMB,Status,PhotoCount,Title,ErrorMessage,TargetTeam";
     let url: string | null =
         `https://graph.microsoft.com/v1.0/sites/${LOG_SITE_ID}/lists/${LOG_LIST_ID}/items?expand=fields(select=${fields})&$top=200`;
 
@@ -171,6 +180,7 @@ const StatsPage: React.FC = () => {
     const [entries, setEntries] = useState<ParsedLogEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [employeeSearch, setEmployeeSearch] = useState("");
 
     useEffect(() => {
         if (!isAuthenticated || accounts.length === 0) {
@@ -199,7 +209,8 @@ const StatsPage: React.FC = () => {
                     photoCount: f.PhotoCount ?? 0,
                     totalSizeMB: f.TotalSizeMB ?? 0,
                     status: f.Status === "Error" ? "Error" : "Success",
-                    errorMessage: f.ErrorMessage ?? ""
+                    errorMessage: f.ErrorMessage ?? "",
+                    targetTeam: f.TargetTeam ?? "Unbekannt"
                 }));
 
                 // Nach Datum absteigend sortieren
@@ -263,6 +274,11 @@ const StatsPage: React.FC = () => {
 
     /** Employee usage overview */
     const employeeUsage = useMemo(() => buildEmployeeUsageSummary(entries), [entries]);
+    const filteredEmployeeUsage = useMemo(() => {
+        const query = employeeSearch.trim().toLowerCase();
+        if (!query) return employeeUsage;
+        return employeeUsage.filter((row) => row.user.toLowerCase().includes(query));
+    }, [employeeSearch, employeeUsage]);
     const activeUsers = employeeUsage.length;
     const successfulUploads = entries.filter((entry) => entry.status === "Success").length;
     const failedUploads = entries.filter((entry) => entry.status === "Error").length;
@@ -457,12 +473,21 @@ const StatsPage: React.FC = () => {
             </Box>
 
             <Paper elevation={2} sx={{ p: 2, mb: 4 }}>
-                <Typography variant="h6" gutterBottom>Mitarbeiter-Übersicht</Typography>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 2, mb: 2, flexWrap: "wrap" }}>
+                    <Typography variant="h6" gutterBottom sx={{ mb: 0 }}>Mitarbeiter-Übersicht</Typography>
+                    <TextField
+                        size="small"
+                        label="Mitarbeiter suchen"
+                        value={employeeSearch}
+                        onChange={(event) => setEmployeeSearch(event.target.value)}
+                    />
+                </Box>
                 <TableContainer>
                     <Table size="small">
                         <TableHead>
                             <TableRow>
                                 <TableCell>Mitarbeiter</TableCell>
+                                <TableCell>Hauptteam</TableCell>
                                 <TableCell align="right">Uploads</TableCell>
                                 <TableCell align="right">Erfolgreich</TableCell>
                                 <TableCell align="right">Fehler</TableCell>
@@ -472,9 +497,10 @@ const StatsPage: React.FC = () => {
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {employeeUsage.map((row) => (
+                            {filteredEmployeeUsage.map((row) => (
                                 <TableRow key={row.user}>
                                     <TableCell>{row.user}</TableCell>
+                                    <TableCell>{row.primaryTeam}</TableCell>
                                     <TableCell align="right">{row.uploads}</TableCell>
                                     <TableCell align="right">{row.successfulUploads}</TableCell>
                                     <TableCell align="right">{row.failedUploads}</TableCell>
