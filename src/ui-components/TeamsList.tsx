@@ -1079,14 +1079,17 @@ const TeamsList: React.FC = () => {
                     {teamMembers.length > 0 && (
                         <Autocomplete
                             multiple
+                            disableCloseOnSelect
                             options={teamMembers}
                             getOptionLabel={(option) => option.displayName}
                             value={selectedMentions}
+                            isOptionEqualToValue={(option, value) => option.id === value.id}
                             onChange={(event, newValue) => {
                                 setSelectedMentions(newValue);
                             }}
-                            renderOption={(props, option) => (
-                                <Box component="li" {...props}>
+                            renderOption={(props, option, { selected }) => (
+                                <Box component="li" {...props} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Checkbox checked={selected} tabIndex={-1} disableRipple />
                                     {getMentionDropdownLabel(option)}
                                 </Box>
                             )}
