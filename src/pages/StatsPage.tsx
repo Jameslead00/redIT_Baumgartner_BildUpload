@@ -88,7 +88,7 @@ export function buildEmployeeUsageSummary(entries: ParsedLogEntry[]): EmployeeUs
 
     entries.forEach((entry) => {
         const user = parseUserFromTitle(entry.title);
-        const current = summaryMap.get(user) ?? {
+        const current: EmployeeUsageSummary = summaryMap.get(user) ?? {
             user,
             uploads: 0,
             successfulUploads: 0,
@@ -96,6 +96,8 @@ export function buildEmployeeUsageSummary(entries: ParsedLogEntry[]): EmployeeUs
             totalMB: 0,
             successRate: 0,
             lastActivity: null,
+            primaryTeam: "-",
+            teamBreakdown: [],
         };
 
         current.uploads += 1;
