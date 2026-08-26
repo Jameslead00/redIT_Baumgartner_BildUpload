@@ -450,7 +450,7 @@ const StatsPage: React.FC = () => {
             </Typography>
             {selectedEmployee && selectedEmployeeSummary && (
                 <Alert severity="info" sx={{ mb: 3 }}>
-                    Gefiltert auf Mitarbeiter: {selectedEmployeeSummary.user} · {selectedEmployeeSummary.primaryTeam} · {selectedEmployeeSummary.uploads} Uploads
+                    Gefiltert auf Mitarbeiter: {selectedEmployeeSummary.user} · {selectedEmployeeSummary.uploads} Uploads
                 </Alert>
             )}
 
@@ -556,7 +556,6 @@ const StatsPage: React.FC = () => {
                                         key={team}
                                         dataKey={team}
                                         name={team}
-                                        stackId="posts"
                                         fill={['#1976d2', '#2e7d32', '#ed6c02', '#9c27b0', '#d32f2f'][index % 5]}
                                     />
                                 ))}
