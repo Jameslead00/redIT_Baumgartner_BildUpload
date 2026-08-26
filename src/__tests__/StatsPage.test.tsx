@@ -1,4 +1,4 @@
-import { buildEmployeeUsageSummary, parseUserFromTitle } from '../pages/StatsPage';
+import { buildEmployeeTeamHistory, buildEmployeeUsageSummary, parseUserFromTitle } from '../pages/StatsPage';
 
 describe('StatsPage reporting helpers', () => {
   test('parses the employee email from the SharePoint log title', () => {
@@ -15,7 +15,8 @@ describe('StatsPage reporting helpers', () => {
         photoCount: 5,
         totalSizeMB: 12.5,
         status: 'Success' as const,
-        errorMessage: ''
+        errorMessage: '',
+        targetTeam: 'Team A'
       },
       {
         title: '[def] Upload by sbaumgartner@baumgartnerfenster.ch',
@@ -23,7 +24,8 @@ describe('StatsPage reporting helpers', () => {
         photoCount: 3,
         totalSizeMB: 8,
         status: 'Error' as const,
-        errorMessage: 'message=Upload failed'
+        errorMessage: 'message=Upload failed',
+        targetTeam: 'Team B'
       },
       {
         title: 'Upload by redadmin@baumgartnerfenster.ch',
@@ -31,7 +33,8 @@ describe('StatsPage reporting helpers', () => {
         photoCount: 2,
         totalSizeMB: 4,
         status: 'Success' as const,
-        errorMessage: ''
+        errorMessage: '',
+        targetTeam: 'Team A'
       }
     ];
 
@@ -54,6 +57,45 @@ describe('StatsPage reporting helpers', () => {
         totalMB: 4,
         successRate: 100,
       })
+    ]);
+  });
+
+  test('builds a per-date team history for a selected employee', () => {
+    const entries = [
+      {
+        title: 'Upload by sbaumgartner@baumgartnerfenster.ch',
+        logtime: new Date('2026-08-10T08:00:00Z'),
+        photoCount: 5,
+        totalSizeMB: 12.5,
+        status: 'Success' as const,
+        errorMessage: '',
+        targetTeam: 'Team A'
+      },
+      {
+        title: 'Upload by sbaumgartner@baumgartnerfenster.ch',
+        logtime: new Date('2026-08-11T08:00:00Z'),
+        photoCount: 2,
+        totalSizeMB: 4,
+        status: 'Success' as const,
+        errorMessage: '',
+        targetTeam: 'Team B'
+      },
+      {
+        title: 'Upload by redadmin@baumgartnerfenster.ch',
+        logtime: new Date('2026-08-10T09:00:00Z'),
+        photoCount: 1,
+        totalSizeMB: 3,
+        status: 'Success' as const,
+        errorMessage: '',
+        targetTeam: 'Team A'
+      }
+    ];
+
+    const history = buildEmployeeTeamHistory(entries as any, 'sbaumgartner@baumgartnerfenster.ch');
+
+    expect(history).toEqual([
+      expect.objectContaining({ user: 'sbaumgartner@baumgartnerfenster.ch', team: 'Team B', date: '2026-08-11' }),
+      expect.objectContaining({ user: 'sbaumgartner@baumgartnerfenster.ch', team: 'Team A', date: '2026-08-10' })
     ]);
   });
 });

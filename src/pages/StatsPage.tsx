@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import {
     Container, Paper, Typography, Box, Table, TableBody,
     TableCell, TableContainer, TableHead, TableRow,
-    CircularProgress, Alert, Chip, TextField
+    CircularProgress, Alert, Chip, TextField, Autocomplete, Button
 } from "@mui/material";
 import {
     BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
@@ -67,6 +67,16 @@ interface EmployeeUsageSummary {
     teamBreakdown: TeamBreakdownItem[];
 }
 
+interface EmployeeTeamHistoryEntry {
+    user: string;
+    date: string;
+    team: string;
+    status: "Success" | "Error";
+    totalMB: number;
+    uploads: number;
+    logtime: Date;
+}
+
 // ─── Farben für PieChart ──────────────────────────────────────────────────────
 
 const PIE_COLORS = ["#4caf50", "#f44336"]; // grün = Success, rot = Error
@@ -81,6 +91,13 @@ export function parseUserFromTitle(title?: string): string {
     if (!user) return "unknown";
 
     return user.toLowerCase();
+}
+
+function toDateKey(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
 }
 
 export function buildEmployeeUsageSummary(entries: ParsedLogEntry[]): EmployeeUsageSummary[] {
@@ -110,6 +127,14 @@ export function buildEmployeeUsageSummary(entries: ParsedLogEntry[]): EmployeeUs
             current.failedUploads += 1;
         }
 
+        const team = (entry.targetTeam ?? "Unbekannt").trim() || "Unbekannt";
+        const teamBreakdownMap = new Map(current.teamBreakdown.map((item) => [item.team, item.count]));
+        teamBreakdownMap.set(team, (teamBreakdownMap.get(team) ?? 0) + 1);
+        current.teamBreakdown = Array.from(teamBreakdownMap.entries())
+            .map(([teamName, count]) => ({ team: teamName, count }))
+            .sort((a, b) => b.count - a.count || a.team.localeCompare(b.team));
+        current.primaryTeam = current.teamBreakdown[0]?.team ?? "-";
+
         summaryMap.set(user, current);
     });
 
@@ -119,6 +144,36 @@ export function buildEmployeeUsageSummary(entries: ParsedLogEntry[]): EmployeeUs
             successRate: item.uploads === 0 ? 0 : Math.round((item.successfulUploads / item.uploads) * 100),
         }))
         .sort((a, b) => b.uploads - a.uploads || b.totalMB - a.totalMB);
+}
+
+export function buildEmployeeTeamHistory(entries: ParsedLogEntry[], selectedUser: string): EmployeeTeamHistoryEntry[] {
+    const filteredEntries = entries.filter((entry) => parseUserFromTitle(entry.title) === selectedUser.toLowerCase());
+
+    const historyMap = new Map<string, EmployeeTeamHistoryEntry>();
+
+    filteredEntries.forEach((entry) => {
+        const dateKey = toDateKey(entry.logtime);
+        const team = (entry.targetTeam ?? "Unbekannt").trim() || "Unbekannt";
+        const current = historyMap.get(dateKey) ?? {
+            user: selectedUser.toLowerCase(),
+            date: dateKey,
+            team,
+            status: entry.status,
+            totalMB: 0,
+            uploads: 0,
+            logtime: entry.logtime,
+        };
+
+        current.totalMB += entry.totalSizeMB;
+        current.uploads += 1;
+        current.status = entry.status;
+        current.team = team;
+        current.logtime = current.logtime > entry.logtime ? current.logtime : entry.logtime;
+        historyMap.set(dateKey, current);
+    });
+
+    return Array.from(historyMap.values())
+        .sort((a, b) => b.logtime.getTime() - a.logtime.getTime());
 }
 
 // ─── Hilfsfunktionen ──────────────────────────────────────────────────────────
@@ -183,6 +238,7 @@ const StatsPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [employeeSearch, setEmployeeSearch] = useState("");
+    const [selectedEmployee, setSelectedEmployee] = useState("");
 
     useEffect(() => {
         if (!isAuthenticated || accounts.length === 0) {
@@ -235,7 +291,7 @@ const StatsPage: React.FC = () => {
     /** Uploads pro Monat + MB pro Monat */
     const monthlyData: MonthlyData[] = useMemo(() => {
         const map = new Map<string, { uploads: number; totalMB: number }>();
-        entries.forEach((e) => {
+        currentEntries.forEach((e) => {
             const key = toMonthKey(e.logtime);
             const existing = map.get(key) ?? { uploads: 0, totalMB: 0 };
             existing.uploads += 1;
@@ -250,44 +306,58 @@ const StatsPage: React.FC = () => {
                 uploads: v.uploads,
                 totalMB: Math.round(v.totalMB * 100) / 100
             }));
-    }, [entries]);
+    }, [currentEntries]);
 
     /** Success vs Fail Counts + Prozent */
     const statusData: StatusData[] = useMemo(() => {
-        const total = entries.length;
+        const total = currentEntries.length;
         if (total === 0) return [];
-        const successCount = entries.filter((e) => e.status === "Success").length;
+        const successCount = currentEntries.filter((e) => e.status === "Success").length;
         const errorCount = total - successCount;
         return [
             { name: "Success", value: successCount, percent: ((successCount / total) * 100).toFixed(1) },
             { name: "Error", value: errorCount, percent: ((errorCount / total) * 100).toFixed(1) }
         ];
-    }, [entries]);
+    }, [currentEntries]);
+
+    const employeeUsage = useMemo(() => buildEmployeeUsageSummary(entries), [entries]);
+    const employeeOptions = useMemo(() => employeeUsage.map((row) => row.user), [employeeUsage]);
+    const currentEntries = useMemo(() => {
+        if (!selectedEmployee) return entries;
+        return entries.filter((entry) => parseUserFromTitle(entry.title) === selectedEmployee.toLowerCase());
+    }, [entries, selectedEmployee]);
+    const selectedEmployeeSummary = useMemo(
+        () => employeeUsage.find((row) => row.user === selectedEmployee.toLowerCase()) ?? null,
+        [employeeUsage, selectedEmployee]
+    );
+    const selectedEmployeeHistory = useMemo(
+        () => (selectedEmployee ? buildEmployeeTeamHistory(entries, selectedEmployee.toLowerCase()) : []),
+        [entries, selectedEmployee]
+    );
 
     /** Gesamtsummen */
-    const totalUploads = entries.length;
+    const totalUploads = currentEntries.length;
     const totalMB = useMemo(
-        () => Math.round(entries.reduce((sum, e) => sum + e.totalSizeMB, 0) * 100) / 100,
-        [entries]
+        () => Math.round(currentEntries.reduce((sum, e) => sum + e.totalSizeMB, 0) * 100) / 100,
+        [currentEntries]
     );
 
     /** Letzte 10 Einträge */
-    const recentEntries = useMemo(() => entries.slice(0, 10), [entries]);
+    const recentEntries = useMemo(() => currentEntries.slice(0, 10), [currentEntries]);
 
-    /** Employee usage overview */
-    const employeeUsage = useMemo(() => buildEmployeeUsageSummary(entries), [entries]);
     const filteredEmployeeUsage = useMemo(() => {
         const query = employeeSearch.trim().toLowerCase();
-        if (!query) return employeeUsage;
-        return employeeUsage.filter((row) => row.user.toLowerCase().includes(query));
-    }, [employeeSearch, employeeUsage]);
-    const activeUsers = employeeUsage.length;
-    const successfulUploads = entries.filter((entry) => entry.status === "Success").length;
-    const failedUploads = entries.filter((entry) => entry.status === "Error").length;
-    const employeeLeader = employeeUsage[0];
+        const base = selectedEmployee ? employeeUsage.filter((row) => row.user === selectedEmployee.toLowerCase()) : employeeUsage;
+        if (!query) return base;
+        return base.filter((row) => row.user.toLowerCase().includes(query));
+    }, [employeeSearch, employeeUsage, selectedEmployee]);
+    const activeUsers = selectedEmployee ? 1 : employeeUsage.length;
+    const successfulUploads = currentEntries.filter((entry) => entry.status === "Success").length;
+    const failedUploads = currentEntries.filter((entry) => entry.status === "Error").length;
+    const employeeLeader = selectedEmployeeSummary ?? employeeUsage[0] ?? null;
     const monthlyActiveUsers = useMemo(() => {
         const map = new Map<string, Set<string>>();
-        entries.forEach((entry) => {
+        currentEntries.forEach((entry) => {
             const key = toMonthKey(entry.logtime);
             const users = map.get(key) ?? new Set<string>();
             users.add(parseUserFromTitle(entry.title));
@@ -296,7 +366,7 @@ const StatsPage: React.FC = () => {
         return Array.from(map.entries())
             .sort(([a], [b]) => a.localeCompare(b))
             .map(([label, users]) => ({ label, activeUsers: users.size }));
-    }, [entries]);
+    }, [currentEntries]);
 
     // ── Render ────────────────────────────────────────────────────────────────
 
@@ -340,6 +410,11 @@ const StatsPage: React.FC = () => {
             <Typography variant="h4" gutterBottom>
                 Upload-Statistiken
             </Typography>
+            {selectedEmployee && selectedEmployeeSummary && (
+                <Alert severity="info" sx={{ mb: 3 }}>
+                    Gefiltert auf Mitarbeiter: {selectedEmployeeSummary.user} · {selectedEmployeeSummary.primaryTeam} · {selectedEmployeeSummary.uploads} Uploads
+                </Alert>
+            )}
 
             {/* ── Gesamtsummen ──────────────────────────────────────────── */}
             <Box sx={{ display: "flex", gap: 2, mb: 3, flexWrap: "wrap" }}>
@@ -381,6 +456,50 @@ const StatsPage: React.FC = () => {
                     <Typography variant="body2" color="text.secondary">Fehlgeschlagene Uploads</Typography>
                 </Paper>
             </Box>
+
+            <Paper elevation={2} sx={{ p: 2, mb: 4 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
+                    <Typography variant="h6" sx={{ mb: 0 }}>Mitarbeiter filtern</Typography>
+                    <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => {
+                            setSelectedEmployee("");
+                            setEmployeeSearch("");
+                        }}
+                        sx={{ minWidth: "auto" }}
+                    >
+                        Zurücksetzen
+                    </Button>
+                </Box>
+                <Autocomplete
+                    options={employeeOptions}
+                    freeSolo
+                    value={selectedEmployee || null}
+                    inputValue={employeeSearch}
+                    onInputChange={(_event, newInputValue) => {
+                        setEmployeeSearch(newInputValue);
+                        if (!newInputValue) {
+                            setSelectedEmployee("");
+                        }
+                    }}
+                    onChange={(_event, newValue) => {
+                        const nextValue = typeof newValue === "string" ? newValue : newValue ?? "";
+                        setSelectedEmployee(nextValue.toLowerCase());
+                        setEmployeeSearch(nextValue);
+                    }}
+                    renderInput={(params) => (
+                        <TextField
+                            {...params}
+                            size="small"
+                            label="Mitarbeiter auswählen"
+                            placeholder="Name oder E-Mail eingeben"
+                            sx={{ mt: 2 }}
+                        />
+                    )}
+                    sx={{ mt: 1 }}
+                />
+            </Paper>
 
             {/* ── Charts Row ───────────────────────────────────────────── */}
             <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap", mb: 4 }}>
@@ -477,12 +596,6 @@ const StatsPage: React.FC = () => {
             <Paper elevation={2} sx={{ p: 2, mb: 4 }}>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 2, mb: 2, flexWrap: "wrap" }}>
                     <Typography variant="h6" gutterBottom sx={{ mb: 0 }}>Mitarbeiter-Übersicht</Typography>
-                    <TextField
-                        size="small"
-                        label="Mitarbeiter suchen"
-                        value={employeeSearch}
-                        onChange={(event) => setEmployeeSearch(event.target.value)}
-                    />
                 </Box>
                 <TableContainer>
                     <Table size="small">
@@ -517,6 +630,42 @@ const StatsPage: React.FC = () => {
                     </Table>
                 </TableContainer>
             </Paper>
+
+            {selectedEmployeeHistory.length > 0 && (
+                <Paper elevation={2} sx={{ p: 2, mb: 4 }}>
+                    <Typography variant="h6" gutterBottom>Team-/Datumsverlauf für {selectedEmployee}</Typography>
+                    <TableContainer>
+                        <Table size="small">
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell>Datum</TableCell>
+                                    <TableCell>Team</TableCell>
+                                    <TableCell align="right">Uploads</TableCell>
+                                    <TableCell align="right">MB</TableCell>
+                                    <TableCell>Status</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {selectedEmployeeHistory.map((item) => (
+                                    <TableRow key={`${item.user}-${item.date}`}>
+                                        <TableCell>{item.date}</TableCell>
+                                        <TableCell>{item.team}</TableCell>
+                                        <TableCell align="right">{item.uploads}</TableCell>
+                                        <TableCell align="right">{item.totalMB.toFixed(1)}</TableCell>
+                                        <TableCell>
+                                            <Chip
+                                                label={item.status}
+                                                size="small"
+                                                color={item.status === "Success" ? "success" : "error"}
+                                            />
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                </Paper>
+            )}
 
             {/* ── Letzte 10 Einträge ───────────────────────────────────── */}
             <Paper elevation={2} sx={{ p: 2 }}>
