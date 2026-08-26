@@ -1,18 +1,23 @@
 import React, { useState, useEffect } from "react";
 import AppBar from "@mui/material/AppBar";
 import Toolbar from "@mui/material/Toolbar";
-import Link from "@mui/material/Link";
 import Typography from "@mui/material/Typography";
-import { Wifi, WifiOff } from "@mui/icons-material";
-import { Tooltip, Box, ToggleButtonGroup, ToggleButton } from "@mui/material";
+import { Wifi, WifiOff, BarChartOutlined } from "@mui/icons-material";
+import { Tooltip, Box, ToggleButtonGroup, ToggleButton, Button } from "@mui/material";
 import { useTranslation } from "react-i18next";
+import { useMsal, useAccount, useIsAuthenticated } from "@azure/msal-react";
 import WelcomeName from "./WelcomeName";
 import SignInSignOutButton from "./SignInSignOutButton";
 import { Link as RouterLink } from "react-router-dom";
+import { isReportingUserAllowed } from "../utils/reportingAccess";
 
 const NavBar = () => {
     const { t, i18n } = useTranslation();
+    const { accounts } = useMsal();
+    const account = useAccount(accounts[0] || {});
+    const isAuthenticated = useIsAuthenticated();
     const [isOnline, setIsOnline] = useState(navigator.onLine);
+    const canAccessReporting = isAuthenticated && isReportingUserAllowed(account ?? accounts[0] ?? null);
 
     useEffect(() => {
         const handleOnline = () => setIsOnline(true);
@@ -70,6 +75,25 @@ const NavBar = () => {
                         <ToggleButton value="fr" data-testid="lang-fr">FR</ToggleButton>
                     </ToggleButtonGroup>
                     <WelcomeName />
+                    {canAccessReporting && (
+                        <Button
+                            component={RouterLink}
+                            to="/reporting"
+                            color="inherit"
+                            variant="outlined"
+                            startIcon={<BarChartOutlined />}
+                            sx={{
+                                mr: 1,
+                                borderColor: 'rgba(255,255,255,0.45)',
+                                color: '#fff',
+                                '&:hover': {
+                                    backgroundColor: 'rgba(255,255,255,0.08)',
+                                },
+                            }}
+                        >
+                            Reporting Dashboard
+                        </Button>
+                    )}
                     <Box sx={{ mx: 1 }}>
                         <Tooltip title={isOnline ? t('navbar.online') : t('navbar.offline')}>
                             {isOnline ? <Wifi /> : <WifiOff />}
