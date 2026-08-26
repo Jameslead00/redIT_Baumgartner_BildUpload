@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "https://jameslead00.github.io/redIT_Baumgartner_BildUpload/static/css/main.dd4c248f.css",
+    "main.js": "https://jameslead00.github.io/redIT_Baumgartner_BildUpload/static/js/main.3b0b66f5.js",
+    "index.html": "https://jameslead00.github.io/redIT_Baumgartner_BildUpload/index.html",
+    "main.dd4c248f.css.map": "https://jameslead00.github.io/redIT_Baumgartner_BildUpload/static/css/main.dd4c248f.css.map",
+    "main.3b0b66f5.js.map": "https://jameslead00.github.io/redIT_Baumgartner_BildUpload/static/js/main.3b0b66f5.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.dd4c248f.css",
+    "static/js/main.3b0b66f5.js"
+  ]
+}
