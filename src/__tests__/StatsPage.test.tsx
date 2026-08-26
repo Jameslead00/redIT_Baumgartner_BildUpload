@@ -1,4 +1,10 @@
-import { buildDailyTeamPostChart, buildEmployeeTeamHistory, buildEmployeeUsageSummary, parseUserFromTitle } from '../pages/StatsPage';
+import {
+  buildDailyTeamPersonChart,
+  buildDailyTeamPostChart,
+  buildEmployeeTeamHistory,
+  buildEmployeeUsageSummary,
+  parseUserFromTitle,
+} from '../pages/StatsPage';
 
 describe('StatsPage reporting helpers', () => {
   test('parses the employee email from the SharePoint log title', () => {
@@ -164,6 +170,22 @@ describe('StatsPage reporting helpers', () => {
     expect(chartData).toEqual([
       expect.objectContaining({ date: '2026-08-10', 'Team A': 1, 'Team B': 1, Sonstige: 1 }),
       expect.objectContaining({ date: '2026-08-11', Sonstige: 2 })
+    ]);
+  });
+
+  test('builds a per-date employee chart when a team is selected', () => {
+    const entries = [
+      { title: 'Upload by sbaumgartner@baumgartnerfenster.ch', logtime: new Date('2026-08-10T08:00:00Z'), photoCount: 1, totalSizeMB: 1, status: 'Success' as const, errorMessage: '', targetTeam: 'Team A' },
+      { title: 'Upload by sbaumgartner@baumgartnerfenster.ch', logtime: new Date('2026-08-10T09:00:00Z'), photoCount: 1, totalSizeMB: 1, status: 'Success' as const, errorMessage: '', targetTeam: 'Team A' },
+      { title: 'Upload by redadmin@baumgartnerfenster.ch', logtime: new Date('2026-08-10T10:00:00Z'), photoCount: 1, totalSizeMB: 1, status: 'Success' as const, errorMessage: '', targetTeam: 'Team A' },
+      { title: 'Upload by redadmin@baumgartnerfenster.ch', logtime: new Date('2026-08-11T10:00:00Z'), photoCount: 1, totalSizeMB: 1, status: 'Success' as const, errorMessage: '', targetTeam: 'Team B' },
+      { title: 'Upload by sbaumgartner@baumgartnerfenster.ch', logtime: new Date('2026-08-11T11:00:00Z'), photoCount: 1, totalSizeMB: 1, status: 'Success' as const, errorMessage: '', targetTeam: 'Team B' },
+    ];
+
+    const chartData = buildDailyTeamPersonChart(entries as any, 'Team A');
+
+    expect(chartData).toEqual([
+      expect.objectContaining({ date: '2026-08-10', 'sbaumgartner@baumgartnerfenster.ch': 2, 'redadmin@baumgartnerfenster.ch': 1 }),
     ]);
   });
 });

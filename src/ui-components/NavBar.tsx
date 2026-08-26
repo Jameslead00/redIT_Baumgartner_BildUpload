@@ -47,7 +47,7 @@ const NavBar = () => {
                         {t('navbar.appTitle')}
                     </Typography>
 
-                    <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+                    <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', minWidth: 0 }}>
                         {canAccessReporting && (
                             <Button
                                 component={RouterLink}
@@ -60,6 +60,7 @@ const NavBar = () => {
                                     color: '#fff',
                                     minWidth: 200,
                                     whiteSpace: 'nowrap',
+                                    mx: 'auto',
                                     '&:hover': {
                                         backgroundColor: 'rgba(255,255,255,0.08)',
                                     },

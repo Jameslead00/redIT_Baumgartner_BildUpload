@@ -82,6 +82,11 @@ interface DailyTeamPostEntry {
     [team: string]: string | number;
 }
 
+interface DailyTeamPersonEntry {
+    date: string;
+    [person: string]: string | number;
+}
+
 // ─── Farben für PieChart ──────────────────────────────────────────────────────
 
 const PIE_COLORS = ["#4caf50", "#f44336"]; // grün = Success, rot = Error
@@ -227,6 +232,57 @@ export function buildDailyTeamPostChart(entries: ParsedLogEntry[], selectedUser:
         });
 }
 
+export function buildDailyTeamPersonChart(entries: ParsedLogEntry[], selectedTeam: string, maxVisiblePeople = 6): DailyTeamPersonEntry[] {
+    if (!selectedTeam) return [];
+
+    const normalizedTeam = selectedTeam.trim();
+    const filteredEntries = entries.filter((entry) => {
+        const team = (entry.targetTeam ?? "Unbekannt").trim() || "Unbekannt";
+        return team.toLowerCase() === normalizedTeam.toLowerCase();
+    });
+
+    const personCounts = new Map<string, number>();
+    filteredEntries.forEach((entry) => {
+        const user = parseUserFromTitle(entry.title);
+        personCounts.set(user, (personCounts.get(user) ?? 0) + 1);
+    });
+
+    const orderedPeople = Array.from(personCounts.entries())
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([person]) => person);
+    const visiblePeople = orderedPeople.slice(0, maxVisiblePeople);
+    const hiddenPeople = orderedPeople.slice(maxVisiblePeople);
+
+    const dateMap = new Map<string, DailyTeamPersonEntry>();
+
+    filteredEntries.forEach((entry) => {
+        const date = toDateKey(entry.logtime);
+        const person = parseUserFromTitle(entry.title);
+        const day = dateMap.get(date) ?? { date };
+
+        if (visiblePeople.includes(person)) {
+            day[person] = ((day[person] as number) ?? 0) + 1;
+        } else {
+            day.Sonstige = ((day.Sonstige as number) ?? 0) + 1;
+        }
+
+        dateMap.set(date, day);
+    });
+
+    return Array.from(dateMap.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, row]) => {
+            const merged: DailyTeamPersonEntry = { date };
+            visiblePeople.forEach((person) => {
+                merged[person] = Number(row[person] ?? 0);
+            });
+            if (hiddenPeople.length > 0) {
+                merged.Sonstige = Number(row.Sonstige ?? 0);
+            }
+            return merged;
+        });
+}
+
 // ─── Hilfsfunktionen ──────────────────────────────────────────────────────────
 
 /**
@@ -290,6 +346,8 @@ const StatsPage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [employeeSearch, setEmployeeSearch] = useState("");
     const [selectedEmployee, setSelectedEmployee] = useState("");
+    const [teamSearch, setTeamSearch] = useState("");
+    const [selectedTeam, setSelectedTeam] = useState("");
 
     useEffect(() => {
         if (!isAuthenticated || accounts.length === 0) {
@@ -341,10 +399,23 @@ const StatsPage: React.FC = () => {
 
     const employeeUsage = useMemo(() => buildEmployeeUsageSummary(entries), [entries]);
     const employeeOptions = useMemo(() => employeeUsage.map((row) => row.user), [employeeUsage]);
+    const teamOptions = useMemo(() => {
+        const uniqueTeams = new Set(
+            entries
+                .map((entry) => (entry.targetTeam ?? "Unbekannt").trim() || "Unbekannt")
+                .filter(Boolean)
+        );
+        return Array.from(uniqueTeams).sort((a, b) => a.localeCompare(b));
+    }, [entries]);
     const currentEntries = useMemo(() => {
-        if (!selectedEmployee) return entries;
-        return entries.filter((entry) => parseUserFromTitle(entry.title) === selectedEmployee.toLowerCase());
-    }, [entries, selectedEmployee]);
+        if (selectedEmployee) {
+            return entries.filter((entry) => parseUserFromTitle(entry.title) === selectedEmployee.toLowerCase());
+        }
+        if (selectedTeam) {
+            return entries.filter((entry) => ((entry.targetTeam ?? "Unbekannt").trim() || "Unbekannt").toLowerCase() === selectedTeam.toLowerCase());
+        }
+        return entries;
+    }, [entries, selectedEmployee, selectedTeam]);
 
     /** Uploads pro Monat + MB pro Monat */
     const monthlyData: MonthlyData[] = useMemo(() => {
@@ -389,16 +460,22 @@ const StatsPage: React.FC = () => {
         () => (selectedEmployee ? buildDailyTeamPostChart(entries, selectedEmployee.toLowerCase()) : []),
         [entries, selectedEmployee]
     );
-    const teamKeys = useMemo(() => {
+    const dailyTeamPersonChart = useMemo(
+        () => (selectedTeam ? buildDailyTeamPersonChart(entries, selectedTeam) : []),
+        [entries, selectedTeam]
+    );
+    const activeChartData = selectedEmployee ? dailyTeamPostChart : dailyTeamPersonChart;
+    const chartSeriesKeys = useMemo(() => {
         const set = new Set<string>();
-        dailyTeamPostChart.forEach((day) => {
+        activeChartData.forEach((day) => {
             Object.keys(day).forEach((key) => {
                 if (key !== "date") set.add(key);
             });
         });
         return Array.from(set).sort((a, b) => a.localeCompare(b));
-    }, [dailyTeamPostChart]);
-    const showTeamLegend = teamKeys.length <= 5;
+    }, [activeChartData]);
+    const chartLegendTitle = selectedEmployee ? "Teams" : "Personen";
+    const chartTitle = selectedEmployee ? "Posts pro Tag nach Team" : `Posts pro Tag nach Person im Team ${selectedTeam}`;
 
     /** Gesamtsummen */
     const totalUploads = currentEntries.length;
@@ -416,10 +493,15 @@ const StatsPage: React.FC = () => {
         if (!query) return base;
         return base.filter((row) => row.user.toLowerCase().includes(query));
     }, [employeeSearch, employeeUsage, selectedEmployee]);
-    const activeUsers = selectedEmployee ? 1 : employeeUsage.length;
+    const activeUsers = selectedEmployee || selectedTeam ? (selectedEmployee ? 1 : new Set(currentEntries.map((entry) => parseUserFromTitle(entry.title))).size) : employeeUsage.length;
     const successfulUploads = currentEntries.filter((entry) => entry.status === "Success").length;
     const failedUploads = currentEntries.filter((entry) => entry.status === "Error").length;
     const employeeLeader = selectedEmployeeSummary ?? employeeUsage[0] ?? null;
+    const activeFilterLabel = selectedEmployee
+        ? `Gefiltert auf Mitarbeiter: ${selectedEmployee}`
+        : selectedTeam
+            ? `Gefiltert auf Team: ${selectedTeam}`
+            : "";
 
     // ── Render ────────────────────────────────────────────────────────────────
 
@@ -463,9 +545,9 @@ const StatsPage: React.FC = () => {
             <Typography variant="h4" gutterBottom>
                 Upload-Statistiken
             </Typography>
-            {selectedEmployee && selectedEmployeeSummary && (
+            {activeFilterLabel && (
                 <Alert severity="info" sx={{ mb: 3 }}>
-                    Gefiltert auf Mitarbeiter: {selectedEmployeeSummary.user} · {selectedEmployeeSummary.uploads} Uploads
+                    {activeFilterLabel}{selectedEmployeeSummary ? ` · ${selectedEmployeeSummary.uploads} Uploads` : ""}
                 </Alert>
             )}
 
@@ -512,85 +594,109 @@ const StatsPage: React.FC = () => {
 
             <Paper elevation={2} sx={{ p: 2, mb: 4 }}>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
-                    <Typography variant="h6" sx={{ mb: 0 }}>Mitarbeiter filtern</Typography>
+                    <Typography variant="h6" sx={{ mb: 0 }}>Mitarbeiter / Team filtern</Typography>
                     <Button
                         variant="outlined"
                         size="small"
                         onClick={() => {
                             setSelectedEmployee("");
+                            setSelectedTeam("");
                             setEmployeeSearch("");
+                            setTeamSearch("");
                         }}
                         sx={{ minWidth: "auto" }}
                     >
                         Zurücksetzen
                     </Button>
                 </Box>
-                <Autocomplete
-                    options={employeeOptions}
-                    freeSolo
-                    value={selectedEmployee || null}
-                    inputValue={employeeSearch}
-                    onInputChange={(_event, newInputValue) => {
-                        setEmployeeSearch(newInputValue);
-                        if (!newInputValue) {
+
+                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2, mt: 2 }}>
+                    <Autocomplete
+                        options={employeeOptions}
+                        freeSolo
+                        value={selectedEmployee || null}
+                        inputValue={employeeSearch}
+                        onInputChange={(_event, newInputValue) => {
+                            setEmployeeSearch(newInputValue);
+                            if (!newInputValue) {
+                                setSelectedEmployee("");
+                            }
+                        }}
+                        onChange={(_event, newValue) => {
+                            const nextValue = typeof newValue === "string" ? newValue : newValue ?? "";
+                            setSelectedEmployee(nextValue.toLowerCase());
+                            setSelectedTeam("");
+                            setEmployeeSearch(nextValue);
+                            setTeamSearch("");
+                        }}
+                        renderInput={(params) => (
+                            <TextField
+                                {...params}
+                                size="small"
+                                label="Mitarbeiter auswählen"
+                                placeholder="Name oder E-Mail eingeben"
+                            />
+                        )}
+                    />
+
+                    <Autocomplete
+                        options={teamOptions}
+                        freeSolo
+                        value={selectedTeam || null}
+                        inputValue={teamSearch}
+                        onInputChange={(_event, newInputValue) => {
+                            setTeamSearch(newInputValue);
+                            if (!newInputValue) {
+                                setSelectedTeam("");
+                            }
+                        }}
+                        onChange={(_event, newValue) => {
+                            const nextValue = typeof newValue === "string" ? newValue : newValue ?? "";
+                            setSelectedTeam(nextValue);
                             setSelectedEmployee("");
-                        }
-                    }}
-                    onChange={(_event, newValue) => {
-                        const nextValue = typeof newValue === "string" ? newValue : newValue ?? "";
-                        setSelectedEmployee(nextValue.toLowerCase());
-                        setEmployeeSearch(nextValue);
-                    }}
-                    renderInput={(params) => (
-                        <TextField
-                            {...params}
-                            size="small"
-                            label="Mitarbeiter auswählen"
-                            placeholder="Name oder E-Mail eingeben"
-                            sx={{ mt: 2 }}
-                        />
-                    )}
-                    sx={{ mt: 1 }}
-                />
+                            setTeamSearch(nextValue);
+                            setEmployeeSearch("");
+                        }}
+                        renderInput={(params) => (
+                            <TextField
+                                {...params}
+                                size="small"
+                                label="Team auswählen"
+                                placeholder="Team eingeben"
+                            />
+                        )}
+                    />
+                </Box>
             </Paper>
 
             {/* ── Charts Row ───────────────────────────────────────────── */}
             <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap", mb: 4 }}>
-                {selectedEmployee && dailyTeamPostChart.length > 0 && (
-                    <Paper elevation={3} sx={{ p: 2, flex: 1, minWidth: 420, width: "100%" }}>
-                        <Box sx={{ display: "flex", alignItems: "flex-start", gap: 2, width: "100%" }}>
-                            <Box sx={{ flex: 1, minWidth: 0 }}>
-                                <Typography variant="h6" gutterBottom>Posts pro Tag nach Team</Typography>
-                                <ResponsiveContainer width="100%" height={360}>
-                                    <BarChart data={dailyTeamPostChart}>
-                                        <CartesianGrid strokeDasharray="3 3" />
-                                        <XAxis dataKey="date" />
-                                        <YAxis allowDecimals={false} />
-                                        <Tooltip />
-                                        {teamKeys.map((team, index) => (
-                                            <Bar
-                                                key={team}
-                                                dataKey={team}
-                                                name={team}
-                                                fill={['#1976d2', '#2e7d32', '#ed6c02', '#9c27b0', '#d32f2f'][index % 5]}
-                                            />
-                                        ))}
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </Box>
-                            {showTeamLegend && (
-                                <Box sx={{ minWidth: 220, maxWidth: 260, pt: 4 }}>
-                                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>Teams</Typography>
-                                    <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
-                                        {teamKeys.map((team, index) => (
-                                            <Box key={team} sx={{ display: "flex", alignItems: "center", gap: 1, fontSize: 13 }}>
-                                                <Box sx={{ width: 12, height: 12, backgroundColor: ['#1976d2', '#2e7d32', '#ed6c02', '#9c27b0', '#d32f2f'][index % 5], borderRadius: 0.5 }} />
-                                                <Box sx={{ whiteSpace: "normal", wordBreak: "break-word" }}>{team}</Box>
-                                            </Box>
-                                        ))}
-                                    </Box>
+                {(selectedEmployee || selectedTeam) && activeChartData.length > 0 && (
+                    <Paper elevation={3} sx={{ p: 2, width: "100%", minWidth: 0 }}>
+                        <Typography variant="h6" gutterBottom>{chartTitle}</Typography>
+                        <ResponsiveContainer width="100%" height={420}>
+                            <BarChart data={activeChartData}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="date" />
+                                <YAxis allowDecimals={false} />
+                                <Tooltip />
+                                {chartSeriesKeys.map((entry, index) => (
+                                    <Bar
+                                        key={entry}
+                                        dataKey={entry}
+                                        name={entry}
+                                        fill={['#1976d2', '#2e7d32', '#ed6c02', '#9c27b0', '#d32f2f', '#607d8b', '#ef5350', '#8bc34a'][index % 8]}
+                                    />
+                                ))}
+                            </BarChart>
+                        </ResponsiveContainer>
+                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5, mt: 2, maxHeight: 120, overflowY: "auto", pr: 1 }}>
+                            {chartSeriesKeys.map((entry, index) => (
+                                <Box key={entry} sx={{ display: "flex", alignItems: "center", gap: 1, fontSize: 13, minWidth: 150 }}>
+                                    <Box sx={{ width: 12, height: 12, backgroundColor: ['#1976d2', '#2e7d32', '#ed6c02', '#9c27b0', '#d32f2f', '#607d8b', '#ef5350', '#8bc34a'][index % 8], borderRadius: 0.5 }} />
+                                    <Box sx={{ whiteSpace: "normal", wordBreak: "break-word" }}>{entry}</Box>
                                 </Box>
-                            )}
+                            ))}
                         </Box>
                     </Paper>
                 )}
