@@ -181,24 +181,35 @@ export function buildEmployeeTeamHistory(entries: ParsedLogEntry[], selectedUser
         .sort((a, b) => b.logtime.getTime() - a.logtime.getTime());
 }
 
-export function buildDailyTeamPostChart(entries: ParsedLogEntry[], selectedUser: string): DailyTeamPostEntry[] {
+export function buildDailyTeamPostChart(entries: ParsedLogEntry[], selectedUser: string, maxVisibleTeams = 5): DailyTeamPostEntry[] {
     if (!selectedUser) return [];
 
     const filteredEntries = entries.filter((entry) => parseUserFromTitle(entry.title) === selectedUser.toLowerCase());
-    const teamSet = new Set<string>();
+    const teamCounts = new Map<string, number>();
     filteredEntries.forEach((entry) => {
         const team = (entry.targetTeam ?? "Unbekannt").trim() || "Unbekannt";
-        teamSet.add(team);
+        teamCounts.set(team, (teamCounts.get(team) ?? 0) + 1);
     });
 
-    const teamNames = Array.from(teamSet).sort((a, b) => a.localeCompare(b));
+    const orderedTeams = Array.from(teamCounts.entries())
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([team]) => team);
+    const visibleTeams = orderedTeams.slice(0, maxVisibleTeams);
+    const hiddenTeams = orderedTeams.slice(maxVisibleTeams);
+
     const dateMap = new Map<string, DailyTeamPostEntry>();
 
     filteredEntries.forEach((entry) => {
         const date = toDateKey(entry.logtime);
         const team = (entry.targetTeam ?? "Unbekannt").trim() || "Unbekannt";
         const day = dateMap.get(date) ?? { date };
-        day[team] = ((day[team] as number) ?? 0) + 1;
+
+        if (visibleTeams.includes(team)) {
+            day[team] = ((day[team] as number) ?? 0) + 1;
+        } else {
+            day.Sonstige = ((day.Sonstige as number) ?? 0) + 1;
+        }
+
         dateMap.set(date, day);
     });
 
@@ -206,9 +217,12 @@ export function buildDailyTeamPostChart(entries: ParsedLogEntry[], selectedUser:
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([date, row]) => {
             const merged: DailyTeamPostEntry = { date };
-            teamNames.forEach((team) => {
+            visibleTeams.forEach((team) => {
                 merged[team] = Number(row[team] ?? 0);
             });
+            if (hiddenTeams.length > 0) {
+                merged.Sonstige = Number(row.Sonstige ?? 0);
+            }
             return merged;
         });
 }
@@ -384,6 +398,7 @@ const StatsPage: React.FC = () => {
         });
         return Array.from(set).sort((a, b) => a.localeCompare(b));
     }, [dailyTeamPostChart]);
+    const showTeamLegend = teamKeys.length <= 5;
 
     /** Gesamtsummen */
     const totalUploads = currentEntries.length;
@@ -542,15 +557,15 @@ const StatsPage: React.FC = () => {
             {/* ── Charts Row ───────────────────────────────────────────── */}
             <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap", mb: 4 }}>
                 {selectedEmployee && dailyTeamPostChart.length > 0 && (
-                    <Paper elevation={2} sx={{ p: 2, flex: 2, minWidth: 420 }}>
+                    <Paper elevation={3} sx={{ p: 2, flex: 1, minWidth: 420, width: "100%" }}>
                         <Typography variant="h6" gutterBottom>Posts pro Tag nach Team</Typography>
-                        <ResponsiveContainer width="100%" height={320}>
+                        <ResponsiveContainer width="100%" height={360}>
                             <BarChart data={dailyTeamPostChart}>
                                 <CartesianGrid strokeDasharray="3 3" />
                                 <XAxis dataKey="date" />
                                 <YAxis allowDecimals={false} />
                                 <Tooltip />
-                                <Legend />
+                                {showTeamLegend && <Legend />}
                                 {teamKeys.map((team, index) => (
                                     <Bar
                                         key={team}
@@ -563,7 +578,9 @@ const StatsPage: React.FC = () => {
                         </ResponsiveContainer>
                     </Paper>
                 )}
+            </Box>
 
+            <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap", mb: 4 }}>
                 {/* MB pro Monat (LineChart) */}
                 <Paper elevation={2} sx={{ p: 2, flex: 2, minWidth: 320 }}>
                     <Typography variant="h6" gutterBottom>Datenvolumen pro Monat (MB)</Typography>

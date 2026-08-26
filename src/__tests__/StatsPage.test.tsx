@@ -149,4 +149,21 @@ describe('StatsPage reporting helpers', () => {
       })
     ]);
   });
+
+  test('groups extra teams into a compact Other bucket for the chart', () => {
+    const entries = [
+      { title: 'Upload by sbaumgartner@baumgartnerfenster.ch', logtime: new Date('2026-08-10T08:00:00Z'), photoCount: 1, totalSizeMB: 1, status: 'Success' as const, errorMessage: '', targetTeam: 'Team A' },
+      { title: 'Upload by sbaumgartner@baumgartnerfenster.ch', logtime: new Date('2026-08-10T09:00:00Z'), photoCount: 1, totalSizeMB: 1, status: 'Success' as const, errorMessage: '', targetTeam: 'Team B' },
+      { title: 'Upload by sbaumgartner@baumgartnerfenster.ch', logtime: new Date('2026-08-10T10:00:00Z'), photoCount: 1, totalSizeMB: 1, status: 'Success' as const, errorMessage: '', targetTeam: 'Team C' },
+      { title: 'Upload by sbaumgartner@baumgartnerfenster.ch', logtime: new Date('2026-08-11T10:00:00Z'), photoCount: 1, totalSizeMB: 1, status: 'Success' as const, errorMessage: '', targetTeam: 'Team D' },
+      { title: 'Upload by sbaumgartner@baumgartnerfenster.ch', logtime: new Date('2026-08-11T11:00:00Z'), photoCount: 1, totalSizeMB: 1, status: 'Success' as const, errorMessage: '', targetTeam: 'Team E' },
+    ];
+
+    const chartData = buildDailyTeamPostChart(entries as any, 'sbaumgartner@baumgartnerfenster.ch', 2);
+
+    expect(chartData).toEqual([
+      expect.objectContaining({ date: '2026-08-10', 'Team A': 1, 'Team B': 1, Sonstige: 1 }),
+      expect.objectContaining({ date: '2026-08-11', Sonstige: 2 })
+    ]);
+  });
 });
