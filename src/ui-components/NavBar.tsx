@@ -42,64 +42,70 @@ const NavBar = () => {
     return (
         <div style={{ flexGrow: 1 }}>
             <AppBar position="static">
-                <Toolbar>
-                    <Typography style={{ flexGrow: 1 }}>
+                <Toolbar sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, minHeight: 64 }}>
+                    <Typography sx={{ minWidth: 180, fontWeight: 600 }}>
                         {t('navbar.appTitle')}
                     </Typography>
-                    <ToggleButtonGroup
-                        value={i18n.language}
-                        exclusive
-                        onChange={handleLanguageChange}
-                        size="small"
-                        sx={{
-                            mr: 2,
-                            '& .MuiToggleButton-root': {
-                                color: 'rgba(255,255,255,0.7)',
-                                borderColor: 'rgba(255,255,255,0.3)',
-                                px: 1.5,
-                                py: 0.5,
-                                fontSize: '0.8rem',
-                                fontWeight: 'bold',
-                                '&.Mui-selected': {
+
+                    <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+                        {canAccessReporting && (
+                            <Button
+                                component={RouterLink}
+                                to="/reporting"
+                                color="inherit"
+                                variant="outlined"
+                                startIcon={<BarChartOutlined />}
+                                sx={{
+                                    borderColor: 'rgba(255,255,255,0.45)',
                                     color: '#fff',
-                                    backgroundColor: 'rgba(255,255,255,0.2)',
-                                },
-                                '&:hover': {
-                                    backgroundColor: 'rgba(255,255,255,0.1)',
-                                },
-                            },
-                        }}
-                        data-testid="language-toggle"
-                    >
-                        <ToggleButton value="de" data-testid="lang-de">DE</ToggleButton>
-                        <ToggleButton value="fr" data-testid="lang-fr">FR</ToggleButton>
-                    </ToggleButtonGroup>
-                    <WelcomeName />
-                    {canAccessReporting && (
-                        <Button
-                            component={RouterLink}
-                            to="/reporting"
-                            color="inherit"
-                            variant="outlined"
-                            startIcon={<BarChartOutlined />}
+                                    minWidth: 200,
+                                    whiteSpace: 'nowrap',
+                                    '&:hover': {
+                                        backgroundColor: 'rgba(255,255,255,0.08)',
+                                    },
+                                }}
+                            >
+                                Reporting Dashboard
+                            </Button>
+                        )}
+                    </Box>
+
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1, minWidth: 180 }}>
+                        <ToggleButtonGroup
+                            value={i18n.language}
+                            exclusive
+                            onChange={handleLanguageChange}
+                            size="small"
                             sx={{
-                                mr: 1,
-                                borderColor: 'rgba(255,255,255,0.45)',
-                                color: '#fff',
-                                '&:hover': {
-                                    backgroundColor: 'rgba(255,255,255,0.08)',
+                                '& .MuiToggleButton-root': {
+                                    color: 'rgba(255,255,255,0.7)',
+                                    borderColor: 'rgba(255,255,255,0.3)',
+                                    px: 1.5,
+                                    py: 0.5,
+                                    fontSize: '0.8rem',
+                                    fontWeight: 'bold',
+                                    '&.Mui-selected': {
+                                        color: '#fff',
+                                        backgroundColor: 'rgba(255,255,255,0.2)',
+                                    },
+                                    '&:hover': {
+                                        backgroundColor: 'rgba(255,255,255,0.1)',
+                                    },
                                 },
                             }}
+                            data-testid="language-toggle"
                         >
-                            Reporting Dashboard
-                        </Button>
-                    )}
-                    <Box sx={{ mx: 1 }}>
-                        <Tooltip title={isOnline ? t('navbar.online') : t('navbar.offline')}>
-                            {isOnline ? <Wifi /> : <WifiOff />}
-                        </Tooltip>
+                            <ToggleButton value="de" data-testid="lang-de">DE</ToggleButton>
+                            <ToggleButton value="fr" data-testid="lang-fr">FR</ToggleButton>
+                        </ToggleButtonGroup>
+                        <WelcomeName />
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Tooltip title={isOnline ? t('navbar.online') : t('navbar.offline')}>
+                                {isOnline ? <Wifi /> : <WifiOff />}
+                            </Tooltip>
+                        </Box>
+                        <SignInSignOutButton />
                     </Box>
-                    <SignInSignOutButton />
                 </Toolbar>
             </AppBar>
         </div>

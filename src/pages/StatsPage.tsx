@@ -558,24 +558,40 @@ const StatsPage: React.FC = () => {
             <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap", mb: 4 }}>
                 {selectedEmployee && dailyTeamPostChart.length > 0 && (
                     <Paper elevation={3} sx={{ p: 2, flex: 1, minWidth: 420, width: "100%" }}>
-                        <Typography variant="h6" gutterBottom>Posts pro Tag nach Team</Typography>
-                        <ResponsiveContainer width="100%" height={360}>
-                            <BarChart data={dailyTeamPostChart}>
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="date" />
-                                <YAxis allowDecimals={false} />
-                                <Tooltip />
-                                {showTeamLegend && <Legend />}
-                                {teamKeys.map((team, index) => (
-                                    <Bar
-                                        key={team}
-                                        dataKey={team}
-                                        name={team}
-                                        fill={['#1976d2', '#2e7d32', '#ed6c02', '#9c27b0', '#d32f2f'][index % 5]}
-                                    />
-                                ))}
-                            </BarChart>
-                        </ResponsiveContainer>
+                        <Box sx={{ display: "flex", alignItems: "flex-start", gap: 2, width: "100%" }}>
+                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                                <Typography variant="h6" gutterBottom>Posts pro Tag nach Team</Typography>
+                                <ResponsiveContainer width="100%" height={360}>
+                                    <BarChart data={dailyTeamPostChart}>
+                                        <CartesianGrid strokeDasharray="3 3" />
+                                        <XAxis dataKey="date" />
+                                        <YAxis allowDecimals={false} />
+                                        <Tooltip />
+                                        {teamKeys.map((team, index) => (
+                                            <Bar
+                                                key={team}
+                                                dataKey={team}
+                                                name={team}
+                                                fill={['#1976d2', '#2e7d32', '#ed6c02', '#9c27b0', '#d32f2f'][index % 5]}
+                                            />
+                                        ))}
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </Box>
+                            {showTeamLegend && (
+                                <Box sx={{ minWidth: 220, maxWidth: 260, pt: 4 }}>
+                                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>Teams</Typography>
+                                    <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
+                                        {teamKeys.map((team, index) => (
+                                            <Box key={team} sx={{ display: "flex", alignItems: "center", gap: 1, fontSize: 13 }}>
+                                                <Box sx={{ width: 12, height: 12, backgroundColor: ['#1976d2', '#2e7d32', '#ed6c02', '#9c27b0', '#d32f2f'][index % 5], borderRadius: 0.5 }} />
+                                                <Box sx={{ whiteSpace: "normal", wordBreak: "break-word" }}>{team}</Box>
+                                            </Box>
+                                        ))}
+                                    </Box>
+                                </Box>
+                            )}
+                        </Box>
                     </Paper>
                 )}
             </Box>
