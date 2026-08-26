@@ -480,6 +480,42 @@ describe("TeamsList component", () => {
     expect(screen.getByPlaceholderText(/Namen eingeben/i) || mentionInput).toBeDefined();
   });
 
+  test('shows a checkbox toggle in the mention dropdown for multi-select', async () => {
+    const fakeMsalInstance = {
+      acquireTokenSilent: jest.fn().mockResolvedValue({ accessToken: 'mock-token' })
+    };
+    (msal.useMsal as jest.Mock).mockReturnValue({ instance: fakeMsalInstance, accounts: [{}] });
+    (msal.useAccount as jest.Mock).mockReturnValue({ name: 'User', username: 'u@test' });
+
+    (global as any).fetch.mockImplementation((url: string) => {
+      if (url.includes('/me/joinedTeams')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: teams }) });
+      if (url.includes('/members')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [{ userId: 'u1', displayName: 'Alice' }, { userId: 'u2', displayName: 'Bob' }] }) });
+      if (url.includes('/channels')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [{ id: 'c1', displayName: 'General' }] }) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: [] }) });
+    });
+
+    render(<TeamsList />);
+
+    const input = await screen.findByLabelText(/Teams suchen/i);
+    await userEvent.click(input);
+    await userEvent.type(input, 'Team One');
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+
+    const mentionInput = await screen.findByLabelText(/Personen erwähnen/i);
+    await userEvent.click(mentionInput);
+    await userEvent.type(mentionInput, 'A');
+
+    const option = await screen.findByRole('option', { name: /Alice/i });
+    const checkbox = within(option).getByRole('checkbox');
+
+    expect(checkbox).toBeInTheDocument();
+    expect((checkbox as HTMLInputElement).checked).toBe(false);
+
+    await userEvent.click(checkbox);
+
+    expect((checkbox as HTMLInputElement).checked).toBe(true);
+  });
+
   test('saveOfflinePost writes to db and adds images via ChannelsList onSaveOffline (offline)', async () => {
     const dbModule = require('../db');
     jest.clearAllMocks();
