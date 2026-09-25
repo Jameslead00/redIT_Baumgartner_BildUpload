@@ -1,5 +1,5 @@
 export const REPORTING_ALLOWED_USERS = [
-  "sbaumgartner",
+  "baumgartners",
   "redadmin",
 ] as const;
 
