@@ -25,7 +25,7 @@ Eine moderne, responsive Web-App zur einfachen Erstellung von Posts in Microsoft
 * CI/CD: Azure DevOps Pipelines
 
 ## Voraussetzungen
-* Node.js 18.x oder höher
+* Node.js 22.12.0 oder höher (CI verwendet Node.js 22.x)
 * npm oder yarn
 * Azure AD App-Registrierung (für MSAL)
 * Zugriff auf Microsoft Teams und OneDrive im Tenant
@@ -76,6 +76,11 @@ Eine moderne, responsive Web-App zur einfachen Erstellung von Posts in Microsoft
 2. Verbinde mit Azure DevOps-Repo.
 3. Konfiguriere Build: `npm run build`, Output: `build`.
 4. Pipeline in ADO: Verwende die bereitgestellte YAML für automatischen Build und Deploy.
+
+Die Pipeline installiert Abhängigkeiten mit `npm ci`. Nach Änderungen an `package.json`
+mit `npm install --package-lock-only --ignore-scripts` die Lockdatei aktualisieren und
+`package.json` sowie `package-lock.json` gemeinsam einchecken. Vor dem Push mit
+`npm ci` unter Node.js 22.x prüfen.
 
 **GitHub Pages (alternativ)**
 
