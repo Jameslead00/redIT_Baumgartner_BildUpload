@@ -11,6 +11,7 @@ import {
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { loginRequest } from "../authConfig";
 import { LOG_SITE_ID, LOG_LIST_ID } from "../utils/Logger";
+import { downloadReportingXlsx } from "../utils/reportingExport";
 
 // ─── Typen ────────────────────────────────────────────────────────────────────
 
@@ -26,7 +27,7 @@ interface SPLogFields {
 }
 
 /** Geparster Log-Eintrag */
-interface ParsedLogEntry {
+export interface ParsedLogEntry {
     title: string;
     logtime: Date;
     photoCount: number;
@@ -542,9 +543,18 @@ const StatsPage: React.FC = () => {
 
     return (
         <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-            <Typography variant="h4" gutterBottom>
-                Upload-Statistiken
-            </Typography>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 2, flexWrap: "wrap", mb: 2 }}>
+                <Typography variant="h4" sx={{ mb: 0 }}>
+                    Upload-Statistiken
+                </Typography>
+                <Button
+                    variant="contained"
+                    size="small"
+                    onClick={() => downloadReportingXlsx(entries)}
+                >
+                    XLSX herunterladen ({entries.length} Einträge)
+                </Button>
+            </Box>
             {activeFilterLabel && (
                 <Alert severity="info" sx={{ mb: 3 }}>
                     {activeFilterLabel}{selectedEmployeeSummary ? ` · ${selectedEmployeeSummary.uploads} Uploads` : ""}
