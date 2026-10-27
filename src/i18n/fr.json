@@ -31,6 +31,7 @@
     "imagesSavedAndUploaded": "{{count}} fichier(s) enregistré(s) et téléchargé(s) !",
     "imagesSavedOffline": "{{count}} fichier(s) enregistré(s) hors ligne !",
     "cachedPostsSynced": "{{count}} publication(s) en cache a/ont été téléchargée(s) automatiquement !",
+    "cachedPostsSyncFailed": "{{count}} publication(s) en cache n'a/ont pas pu être téléchargée(s). {{reason}}",
     "fetchTeamsError": "Erreur lors du chargement des teams",
     "fetchTeamsFailure": "Impossible de charger les teams",
     "qualityTeamCheckbox": "Publier aussi dans l'équipe Qualité / Performance"
@@ -73,7 +74,29 @@
   },
   "error": {
     "occurred": "Une erreur s'est produite : ",
-    "unknown": "Erreur inconnue"
+    "unknown": "Erreur inconnue",
+    "ref": "Réf. : {{id}}",
+    "step": {
+      "acquireToken": "Lors de la connexion",
+      "resolveSite": "Lors de l'accès à l'équipe",
+      "checkFolder": "Lors de la vérification du dossier cible",
+      "createFolder": "Lors de la création du dossier cible",
+      "uploadFile": "Lors du téléchargement des fichiers",
+      "postMessage": "Lors de la publication du message",
+      "saveLocal": "Lors de l'enregistrement local"
+    },
+    "reason": {
+      "sessionExpired": "La session a expiré. Veuillez recharger la page et vous reconnecter.",
+      "offline": "Pas de connexion Internet. La publication a été enregistrée localement et sera envoyée automatiquement dès que la connexion sera rétablie.",
+      "network": "La connexion à Microsoft 365 a été interrompue. Veuillez vérifier votre connexion et réessayer.",
+      "noPermission": "Vous n'avez pas les droits pour cette équipe ou ce dossier. Veuillez contacter l'administrateur.",
+      "notFound": "L'équipe, le canal ou le dossier est introuvable. Il a peut-être été renommé ou supprimé.",
+      "tooLarge": "Les fichiers sont trop volumineux pour une publication. Veuillez sélectionner moins de fichiers ou des fichiers plus petits.",
+      "serviceUnavailable": "Microsoft 365 est actuellement surchargé ou indisponible. Veuillez réessayer dans quelques minutes.",
+      "storageFull": "L'espace de stockage de l'appareil est insuffisant pour la mise en cache. Veuillez libérer de l'espace ou sélectionner moins de fichiers.",
+      "requestRejected": "Microsoft 365 a refusé la demande (code {{status}}).",
+      "unexpected": "Une erreur inattendue s'est produite ({{detail}})."
+    }
   },
   "postMessage": {
     "viewOriginal": "Voir l'original ↗",

@@ -1,5 +1,6 @@
 import React from 'react';
 import i18n from '../i18n/i18n';
+import { GraphOperationError } from './ImageUpload';
 
 // Teams/Graph message payloads with hostedContents fail well below unlimited sizes.
 // Keep a conservative safety margin, but large enough that normal image previews still render.
@@ -476,6 +477,14 @@ export const postMessageToChannel = async (
     
     if (!messageResponse.ok) {
         const responseText = await messageResponse.text();
-        throw new Error(`[${correlationId}] Failed to post message to channel: ${messageResponse.status} ${responseText}`);
+        throw new GraphOperationError(`[${correlationId}] Failed to post message to channel: ${messageResponse.status} ${responseText}`, {
+            status: messageResponse.status,
+            statusText: messageResponse.statusText,
+            responseBody: responseText,
+            operation: 'postMessage',
+            teamId,
+            channelId,
+            correlationId,
+        });
     }
 };

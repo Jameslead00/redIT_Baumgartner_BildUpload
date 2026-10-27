@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from "react"; // Added useEffect
 import { useMsal, useAccount } from "@azure/msal-react";
-import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import { loginRequest } from "../authConfig";
 import { TextField, Button, Typography, Box, Alert, Paper, Grid, IconButton, Card, CardMedia, CardContent, Select, MenuItem, FormControl, InputLabel, SelectChangeEvent, Snackbar } from "@mui/material";
 import { Delete as DeleteIcon } from "@mui/icons-material";
 import { db } from '../db';
-import { logToSharePoint } from "../utils/Logger";
+import { logToSharePoint, queuePendingLog, LogEntry } from "../utils/Logger";
+import { getUserFacingErrorMessage } from "../utils/userFacingError";
 import { UploadProgress } from "./UploadProgress";
 import { SubFolder } from '../db'; // Import shared interface
 import { useTranslation } from "react-i18next";
@@ -607,12 +607,16 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
             : `cid-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
         const request = { ...loginRequest, account };
+        let accessToken: string | null = null;
+        let currentStep = 'acquireToken';
+        let folderPath = '';
 
         try {
             const response = await instance.acquireTokenSilent(request);
-            const accessToken = response.accessToken;
+            accessToken = response.accessToken;
 
             // Schritt 1: Hole SharePoint Site-ID
+            currentStep = 'resolveSite';
             const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/groups/${team.id}/sites/root`, {
                 headers: { Authorization: `Bearer ${accessToken}` },
             });
@@ -621,7 +625,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
             const siteId = siteData.id;
 
             // Schritt 2: Bestimme den Ordner-Pfad
-            let folderPath = getFolderPath(channel.displayName);
+            folderPath = getFolderPath(channel.displayName);
             
             // NEW: Append Subfolder if selected
             if (selectedSubFolder) {
@@ -635,6 +639,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
             // but checkFolderExists/createFolder handles the recursive creation if needed or we can rely on it existing.
             // The current createFolder implementation might fail if parent doesn't exist, 
             // but since "Bilder" is parent and we check it, it should be fine.
+            currentStep = 'checkFolder';
             const folderExists = await checkFolderExists(accessToken, siteId, folderPath, {
                 correlationId,
                 teamId: team.id,
@@ -642,6 +647,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
                 channelDisplayName: channel.displayName,
             });
             if (!folderExists) {
+                currentStep = 'createFolder';
                 await createFolder(accessToken, siteId, folderPath, {
                     correlationId,
                     teamId: team.id,
@@ -651,6 +657,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
             }
 
             // Schritt 4: Lade Bilder hoch
+            currentStep = 'uploadFile';
             const imageUrls: string[] = [];
             for (const file of selectedFiles) {
                 let url: string;
@@ -696,6 +703,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
             }
 
             // Schritt 5: Encodiere alle Bilder
+            currentStep = 'encodeImages';
             const base64Images = await encodeFilesToBase64(selectedFiles);
             // Schritt 6: Erfolgreich hochgeladen - Callback aufrufen
             onUploadSuccess(imageUrls, selectedFiles, base64Images);  // base64Images übergeben
@@ -704,36 +712,54 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
             setSnackbarSeverity('success');
             setSnackbarOpen(true);
         } catch (err) {
-            // LOGGING ERROR (Optional, aber hilfreich)
-            if (account) {
-                // Wir versuchen einen Error-Log zu senden, falls möglich (braucht Token)
-                // Da wir hier im catch sind, ist accessToken evtl. nicht verfügbar,
-                // daher lassen wir es hier weg um "minimal" zu bleiben und keine neuen Fehler zu riskieren.
+            const graphErr = isGraphOperationError(err) ? err : null;
+            const errorEntry: LogEntry = {
+                userEmail: account.username,
+                sourceUrl: window.location.href,
+                photoCount: selectedFiles.length,
+                totalSizeMB: parseFloat((selectedFiles.reduce((acc, f) => acc + f.size, 0) / (1024 * 1024)).toFixed(2)),
+                targetTeamName: team.displayName,
+                status: 'Error',
+                correlationId,
+                step: currentStep,
+                operation: graphErr?.operation || 'uploadImages',
+                teamId: team.id,
+                channelId: channel.id,
+                channelDisplayName: channel.displayName,
+                folderPath: graphErr?.folderPath || folderPath,
+                httpStatus: graphErr?.status,
+                httpStatusText: graphErr?.statusText,
+                responseBody: graphErr?.responseBody,
+                errorMessage: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+            };
+            if (accessToken) {
+                await logToSharePoint(accessToken, errorEntry);
+            } else {
+                queuePendingLog(errorEntry);
             }
 
-            if (err instanceof InteractionRequiredAuthError) {
-                // Optional: handle interaction required (e.g., trigger login)
+            if (isGraphOperationError(err)) {
+                console.error(`[${correlationId}] Upload Graph-Fehler`, {
+                    operation: err.operation,
+                    status: err.status,
+                    statusText: err.statusText,
+                    responseBody: err.responseBody,
+                    teamId: err.teamId,
+                    channelId: err.channelId,
+                    channelDisplayName: err.channelDisplayName,
+                    folderPath: err.folderPath,
+                });
             } else {
-                const msg = err instanceof Error ? err.message : t('upload.uploadFailed');
-                if (isGraphOperationError(err)) {
-                    console.error(`[${correlationId}] Upload Graph-Fehler`, {
-                        operation: err.operation,
-                        status: err.status,
-                        statusText: err.statusText,
-                        responseBody: err.responseBody,
-                        teamId: err.teamId,
-                        channelId: err.channelId,
-                        channelDisplayName: err.channelDisplayName,
-                        folderPath: err.folderPath,
-                    });
-                } else {
-                    console.error(`[${correlationId}] Upload-Fehler`, err);
-                }
-                setError(msg);
-                setSnackbarMessage(msg);
-                setSnackbarSeverity('error');
-                setSnackbarOpen(true);
+                console.error(`[${correlationId}] Upload-Fehler`, err);
             }
+            if (err && typeof err === 'object' && !(err as Record<string, unknown>).correlationId) {
+                (err as Record<string, unknown>).correlationId = correlationId;
+            }
+            const msg = getUserFacingErrorMessage(err, t, { step: currentStep });
+            setError(msg);
+            setSnackbarMessage(msg);
+            setSnackbarSeverity('error');
+            setSnackbarOpen(true);
         } finally {
             setUploading(false);
         }
@@ -754,7 +780,8 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
                     setThumbnails([]);
                 } catch (e) {
                     console.error(e);
-                    setSnackbarMessage(t('upload.uploadFailed'));
+                    // Fehler wird bereits in saveOfflinePost/syncPost geloggt; hier nur verständlich anzeigen.
+                    setSnackbarMessage(`${t('upload.uploadFailed')} – ${getUserFacingErrorMessage(e, t)}`);
                     setSnackbarSeverity('error');
                     setSnackbarOpen(true);
                 } finally {

@@ -31,6 +31,7 @@
     "imagesSavedAndUploaded": "{{count}} Datei(en) gespeichert und hochgeladen!",
     "imagesSavedOffline": "{{count}} Datei(en) offline gespeichert!",
     "cachedPostsSynced": "{{count}} gecachte(r) Beitrag/Beiträge wurde(n) automatisch hochgeladen!",
+    "cachedPostsSyncFailed": "{{count}} gecachte(r) Beitrag/Beiträge konnte(n) nicht hochgeladen werden. {{reason}}",
     "fetchTeamsError": "Fehler beim Laden der Teams",
     "fetchTeamsFailure": "Teams konnten nicht geladen werden",
     "qualityTeamCheckbox": "Auch im Qualitätsmangel-Team posten"
@@ -73,7 +74,29 @@
   },
   "error": {
     "occurred": "Ein Fehler ist aufgetreten: ",
-    "unknown": "Unbekannter Fehler"
+    "unknown": "Unbekannter Fehler",
+    "ref": "Ref: {{id}}",
+    "step": {
+      "acquireToken": "Bei der Anmeldung",
+      "resolveSite": "Beim Zugriff auf das Team",
+      "checkFolder": "Beim Prüfen des Zielordners",
+      "createFolder": "Beim Erstellen des Zielordners",
+      "uploadFile": "Beim Hochladen der Dateien",
+      "postMessage": "Beim Posten des Beitrags",
+      "saveLocal": "Beim lokalen Zwischenspeichern"
+    },
+    "reason": {
+      "sessionExpired": "Die Anmeldung ist abgelaufen. Bitte Seite neu laden und erneut anmelden.",
+      "offline": "Keine Internetverbindung. Der Beitrag wurde lokal gespeichert und wird automatisch gesendet, sobald wieder eine Verbindung besteht.",
+      "network": "Die Verbindung zu Microsoft 365 wurde unterbrochen. Bitte Verbindung prüfen und erneut versuchen.",
+      "noPermission": "Keine Berechtigung für dieses Team oder diesen Ordner. Bitte beim Administrator melden.",
+      "notFound": "Team, Kanal oder Ordner wurde nicht gefunden. Möglicherweise wurde er umbenannt oder gelöscht.",
+      "tooLarge": "Die Dateien sind zu gross für einen Beitrag. Bitte weniger oder kleinere Dateien auswählen.",
+      "serviceUnavailable": "Microsoft 365 ist momentan überlastet oder nicht erreichbar. Bitte in ein paar Minuten erneut versuchen.",
+      "storageFull": "Auf dem Gerät ist nicht genug Speicherplatz für die Zwischenspeicherung. Bitte Speicher freigeben oder weniger Dateien auswählen.",
+      "requestRejected": "Microsoft 365 hat die Anfrage abgelehnt (Code {{status}}).",
+      "unexpected": "Ein unerwarteter Fehler ist aufgetreten ({{detail}})."
+    }
   },
   "postMessage": {
     "viewOriginal": "Original anzeigen ↗",

@@ -3,7 +3,8 @@ import { useMsal, useAccount } from "@azure/msal-react";
 import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import { loginRequest } from "../authConfig";
 import { db, Team, Channel, SubFolder } from '../db'; // Import SubFolder
-import { logToSharePoint } from "../utils/Logger";
+import { logToSharePoint, queuePendingLog, flushPendingLogs, LogEntry } from "../utils/Logger";
+import { getUserFacingErrorMessage } from "../utils/userFacingError";
 import ChannelsList from "./ChannelsList";
 import { postMessageToChannel, MentionUser, postMessageToQualityTeamMirror, QUALITY_TEAM_ID, shouldMirrorToQualityTeam } from "./PostMessage"; // MentionUser importieren
 import { Autocomplete, TextField, Button, Typography, Box, Alert, IconButton, Snackbar, Checkbox, FormControlLabel } from "@mui/material";
@@ -39,6 +40,7 @@ const TeamsList: React.FC = () => {
     // Neue States für Snackbar
     const [snackbarOpen, setSnackbarOpen] = useState(false);
     const [snackbarMessage, setSnackbarMessage] = useState('');
+    const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
 
     // Ref, um zu verhindern, dass Sync mehrmals läuft
     const hasSyncedRef = useRef(false);
@@ -48,6 +50,32 @@ const TeamsList: React.FC = () => {
             return crypto.randomUUID();
         }
         return `cid-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    };
+
+    // Schreibt einen Error-Log; ohne nutzbares Token wird er lokal gepuffert und später nachgereicht.
+    const writeErrorLog = async (entry: Omit<LogEntry, 'userEmail' | 'sourceUrl' | 'status'>, accessToken?: string | null): Promise<void> => {
+        const fullEntry: LogEntry = {
+            userEmail: account?.username || 'unknown',
+            sourceUrl: window.location.href,
+            status: 'Error',
+            ...entry,
+        };
+        let token = accessToken || null;
+        if (!token && account) {
+            try {
+                token = (await instance.acquireTokenSilent({ ...loginRequest, account })).accessToken;
+            } catch (tokenErr) {
+                console.error(`[${entry.correlationId}] Kein Token für Error-Log verfügbar:`, tokenErr);
+            }
+        }
+        if (token) {
+            const result = await logToSharePoint(token, fullEntry);
+            if (!result.ok) {
+                console.error(`[${entry.correlationId}] AppLog Error-Write fehlgeschlagen:`, result.status, result.body);
+            }
+        } else {
+            queuePendingLog(fullEntry);
+        }
     };
 
     const getMentionDropdownLabel = (member: MentionUser): string => {
@@ -167,6 +195,14 @@ const TeamsList: React.FC = () => {
             hasSyncedRef.current = false; // Reset wenn offline oder nicht eingeloggt
         }
     }, [isOnline, account, offlinePosts.length]);
+
+    // Lokal gepufferte Error-Logs nachreichen, sobald online und eingeloggt
+    useEffect(() => {
+        if (!isOnline || !account) return;
+        instance.acquireTokenSilent({ ...loginRequest, account })
+            .then(res => flushPendingLogs(res.accessToken))
+            .catch(e => console.error('Pending AppLogs konnten nicht nachgereicht werden:', e));
+    }, [isOnline, account]);
 
     useEffect(() => {
         const stored = localStorage.getItem('favoriteTeams');
@@ -653,11 +689,13 @@ const TeamsList: React.FC = () => {
         try {
             console.log(`[${correlationId}] Starte Sync für Post:`, post.id);
             const request = { ...loginRequest, account };
+            currentStep = 'acquireToken';
             const response = await instance.acquireTokenSilent(request);
             const accessToken = response.accessToken;
             accessTokenForErrorLog = accessToken;
 
             // Bilder aus Dexie laden
+            currentStep = 'loadCachedImages';
             const images = await db.images.where('postId').equals(post.id).toArray();
             const files = images.map(img => img.file);
 
@@ -811,34 +849,29 @@ const TeamsList: React.FC = () => {
             const graphErr = isGraphOperationError(err) ? err : null;
             console.error(`[${correlationId}] Sync-Fehler für Post ${post.id}:`, err);
 
-            if (accessTokenForErrorLog) {
-                const errorLogResult = await logToSharePoint(accessTokenForErrorLog, {
-                    userEmail: account.username,
-                    sourceUrl: window.location.href,
-                    photoCount: 0,
-                    totalSizeMB: 0,
-                    targetTeamName: teams.find(t => t.id === post.teamId)?.displayName || post.teamId,
-                    status: 'Error',
-                    correlationId,
-                    step: currentStep,
-                    teamId: post.teamId,
-                    channelId: post.channelId,
-                    channelDisplayName: post.channelDisplayName,
-                    folderPath: graphErr?.folderPath || folderPath,
-                    operation: graphErr?.operation || 'syncPost',
-                    httpStatus: graphErr?.status,
-                    httpStatusText: graphErr?.statusText,
-                    responseBody: graphErr?.responseBody,
-                    errorMessage: err instanceof Error ? err.message : String(err),
-                });
+            await writeErrorLog({
+                photoCount: 0,
+                totalSizeMB: 0,
+                targetTeamName: teams.find(t => t.id === post.teamId)?.displayName || post.teamId,
+                correlationId,
+                step: currentStep,
+                teamId: post.teamId,
+                channelId: post.channelId,
+                channelDisplayName: post.channelDisplayName,
+                folderPath: graphErr?.folderPath || folderPath,
+                operation: graphErr?.operation || 'syncPost',
+                httpStatus: graphErr?.status,
+                httpStatusText: graphErr?.statusText,
+                responseBody: graphErr?.responseBody,
+                errorMessage: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+            }, accessTokenForErrorLog);
 
-                if (!errorLogResult.ok) {
-                    console.error(`[${correlationId}] AppLog Error-Write fehlgeschlagen:`, errorLogResult.status, errorLogResult.body);
-                }
-            } else {
-                console.error(`[${correlationId}] AppLog Error-Write übersprungen, da kein Access Token verfügbar ist.`);
+            // Kontext für die Anzeige in der UI mitgeben (Schritt + Referenz zum AppLog-Eintrag)
+            if (err && typeof err === 'object') {
+                const e = err as Record<string, unknown>;
+                if (!e.step) e.step = currentStep;
+                if (!e.correlationId) e.correlationId = correlationId;
             }
-
             throw err;
         } finally {
             setPosting(false);
@@ -860,17 +893,43 @@ const TeamsList: React.FC = () => {
             subFolder: subFolder, // Subfolder speichern
             alsoPostToQualityTeam,
         };
-        const postId = await db.posts.add(post);
-        if (files && files.length > 0) {
-            for (const file of files) {
-                await db.images.add({ postId, file });
+        const uploaded = isOnline && account;
+        let postId: number | undefined;
+        try {
+            postId = await db.posts.add(post);
+            if (files && files.length > 0) {
+                for (const file of files) {
+                    await db.images.add({ postId, file });
+                }
             }
+        } catch (dbErr) {
+            // IndexedDB-Fehler (Quota, Private Mode) passieren vor syncPost und würden sonst nie geloggt.
+            const correlationId = createCorrelationId();
+            console.error(`[${correlationId}] Lokales Speichern des Posts fehlgeschlagen:`, dbErr);
+            await writeErrorLog({
+                photoCount: files?.length || 0,
+                totalSizeMB: parseFloat(((files || []).reduce((acc, f) => acc + f.size, 0) / (1024 * 1024)).toFixed(2)),
+                targetTeamName: selectedTeam.displayName,
+                correlationId,
+                step: 'saveToIndexedDb',
+                operation: 'saveOfflinePost',
+                teamId: selectedTeam.id,
+                channelId: selectedChannel.id,
+                channelDisplayName: selectedChannel.displayName,
+                folderPath: subFolder,
+                errorMessage: dbErr instanceof Error ? `${dbErr.name}: ${dbErr.message}` : String(dbErr),
+            });
+            if (dbErr && typeof dbErr === 'object') {
+                const e = dbErr as Record<string, unknown>;
+                if (!e.step) e.step = 'saveToIndexedDb';
+                if (!e.correlationId) e.correlationId = correlationId;
+            }
+            throw dbErr;
         }
         const newPost = { ...post, id: postId };
 
         // Wenn Online, sync sofort — OHNE den offlinePosts State zu aktualisieren,
         // damit der Auto-Sync useEffect nicht nochmal denselben Post synct.
-        const uploaded = isOnline && account;
         if (uploaded) {
             await syncPost(newPost, onProgress);
         } else {
@@ -878,6 +937,7 @@ const TeamsList: React.FC = () => {
             setOfflinePosts([...offlinePosts, newPost]);
         }
         // Feedback via Snackbar anstatt alert
+        setSnackbarSeverity('success');
         setSnackbarMessage(t(uploaded ? 'teams.imagesSavedAndUploaded' : 'teams.imagesSavedOffline', { count: files?.length || 0 }));
         setSnackbarOpen(true);
         // Reset alles
@@ -894,117 +954,29 @@ const TeamsList: React.FC = () => {
         if (!account || !isOnline || offlinePosts.length === 0) return;
         setPosting(true);
         console.log('Starte automatische Sync für', offlinePosts.length, 'Posts');
+        let failedCount = 0;
+        let firstFailureReason = '';
         for (const post of offlinePosts) {
             try {
-                const correlationId = createCorrelationId();
-                console.log(`[${correlationId}] Sync Post:`, post.id);
-                const request = { ...loginRequest, account };
-                const response = await instance.acquireTokenSilent(request);
-                const accessToken = response.accessToken;
-
-                // Bilder aus Dexie laden
-                const images = await db.images.where('postId').equals(post.id).toArray();
-                const files = images.map(img => img.file);
-
-                // HINWEIS: encodeFilesToBase64 entfernt
-
-                // Ordner und Site-ID prüfen
-                const siteResponse = await fetch(`https://graph.microsoft.com/v1.0/groups/${post.teamId}/sites/root`, {
-                    headers: { Authorization: `Bearer ${accessToken}` },
-                });
-                const siteData = await siteResponse.json();
-                const siteId = siteData.id;
-                console.log(`[${correlationId}] Site ID:`, siteId);
-
-                // Bestimme den Ordner-Pfad
-                let folderPath = getFolderPath(post.channelDisplayName);
-                // NEW: Append Subfolder if exists
-                if (post.subFolder) {
-                    folderPath = `${folderPath}/${post.subFolder}`;
-                }
-                console.log(`[${correlationId}] Verwende Ordner-Pfad:`, folderPath);
-
-                // Ordner prüfen/erstellen
-                const folderExists = await checkFolderExists(accessToken, siteId, folderPath, {
-                    correlationId,
-                    teamId: post.teamId,
-                    channelId: post.channelId,
-                    channelDisplayName: post.channelDisplayName,
-                });
-                if (!folderExists) {
-                    await createFolder(accessToken, siteId, folderPath, {
-                        correlationId,
-                        teamId: post.teamId,
-                        channelId: post.channelId,
-                        channelDisplayName: post.channelDisplayName,
-                    });
-                }
-
-                // Hochladen
-                const uploadedUrls: string[] = [];
-                for (const img of images) {
-                    console.log(`[${correlationId}] Lade Bild hoch:`, img.file.name);
-                    let url: string;
-                    if (img.file.size > 4 * 1024 * 1024) {
-                        url = await uploadLargeFile(accessToken, siteId, img.file, folderPath, {
-                            correlationId,
-                            teamId: post.teamId,
-                            channelId: post.channelId,
-                            channelDisplayName: post.channelDisplayName,
-                        });
-                    } else {
-                        url = await uploadSmallFile(accessToken, siteId, img.file, folderPath, {
-                            correlationId,
-                            teamId: post.teamId,
-                            channelId: post.channelId,
-                            channelDisplayName: post.channelDisplayName,
-                        });
-                    }
-                    console.log(`[${correlationId}] Hochgeladene URL:`, url);
-                    uploadedUrls.push(url);
-                }
-
-                // HIER: Mentions aus dem Post-Objekt holen
-                const mentions = post.mentions || [];
-
-                // Posten - Jetzt mit files UND mentions
-                await postMessageToChannel(
-                    accessToken, 
-                    post.teamId, 
-                    post.channelId, 
-                    post.text, 
-                    uploadedUrls, 
-                    files, 
-                    mentions,
-                    { correlationId }
-                );
-
-                if (shouldMirrorToQualityTeam(post.teamId, post.alsoPostToQualityTeam)) {
-                    try {
-                        await postMessageToQualityTeamMirror(
-                            accessToken,
-                            post.text,
-                            uploadedUrls,
-                            files,
-                            mentions,
-                            { correlationId, teamId: QUALITY_TEAM_ID }
-                        );
-                    } catch (mirrorError) {
-                        console.error(`[${correlationId}] Quality-team mirror failed during offline sync:`, mirrorError);
-                    }
-                }
-                
-                await db.posts.delete(post.id);
-                await db.images.where('postId').equals(post.id).delete();
-                console.log(`[${correlationId}] Post synced und gelöscht`);
+                // syncPost übernimmt Upload, Post und Success-/Error-Logging
+                await syncPost(post);
             } catch (err) {
                 console.error('Sync-Fehler für Post', post.id, ':', err);
+                failedCount += 1;
+                if (!firstFailureReason) firstFailureReason = getUserFacingErrorMessage(err, t);
             }
         }
         setOfflinePosts([]);
         setPosting(false);
         // Feedback via Snackbar anstatt alert
-        setSnackbarMessage(t('teams.cachedPostsSynced', { count: offlinePosts.length }));
+        const syncedCount = offlinePosts.length - failedCount;
+        if (failedCount > 0) {
+            setSnackbarSeverity('error');
+            setSnackbarMessage(t('teams.cachedPostsSyncFailed', { count: failedCount, reason: firstFailureReason }));
+        } else {
+            setSnackbarSeverity('success');
+            setSnackbarMessage(t('teams.cachedPostsSynced', { count: syncedCount }));
+        }
         setSnackbarOpen(true);
     };
 
@@ -1108,8 +1080,8 @@ const TeamsList: React.FC = () => {
             )}
 
             {/* Snackbar für Feedback */}
-            <Snackbar open={snackbarOpen} autoHideDuration={6000} onClose={() => setSnackbarOpen(false)}>
-                <Alert onClose={() => setSnackbarOpen(false)} severity="success" sx={{ width: '100%' }}>
+            <Snackbar open={snackbarOpen} autoHideDuration={snackbarSeverity === 'error' ? 12000 : 6000} onClose={() => setSnackbarOpen(false)}>
+                <Alert onClose={() => setSnackbarOpen(false)} severity={snackbarSeverity} sx={{ width: '100%' }}>
                     {snackbarMessage}
                 </Alert>
             </Snackbar>
