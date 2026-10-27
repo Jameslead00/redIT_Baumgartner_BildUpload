@@ -24,7 +24,11 @@ if (!(global as any).fetch) {
 }
 
 if (typeof globalThis.TextEncoder === 'undefined') {
-  globalThis.TextEncoder = NodeTextEncoder;
+  globalThis.TextEncoder = class extends NodeTextEncoder {
+    encode(input?: string) {
+      return Uint8Array.from(super.encode(input));
+    }
+  };
 }
 
 // Mock URL.createObjectURL
@@ -47,7 +51,7 @@ class MockImage {
     return {
       drawImage: jest.fn(),
       fillRect: jest.fn(),
-      getImageData: jest.fn(() => ({ data: [] })),
+      getImageData: jest.fn(() => ({ data: new Uint8ClampedArray() })),
       putImageData: jest.fn(),
     };
   };

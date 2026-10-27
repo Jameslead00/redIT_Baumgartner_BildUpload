@@ -4,6 +4,7 @@ import { render, screen, waitFor, within, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import '@testing-library/jest-dom';
 import TeamsList from "../ui-components/TeamsList";
+import type { OfflinePost } from "../db";
 
 // Mock MSAL (useMsal & useAccount)
 jest.mock("@azure/msal-react", () => ({
@@ -853,13 +854,13 @@ describe("TeamsList component", () => {
     const dbModule = require('../db');
     jest.clearAllMocks();
 
-    const cachedPosts = [{
+    const cachedPosts: OfflinePost[] = [{
       id: 8,
       teamId: 't1',
       channelId: 'c1',
       channelDisplayName: 'General',
       text: 'Offline with missing folder',
-      imageUrls: [] as string[],
+      imageUrls: [],
       timestamp: Date.now(),
       mentions: [],
       subFolder: ''
@@ -944,13 +945,13 @@ describe("TeamsList component", () => {
     const dbModule = require('../db');
     jest.clearAllMocks();
 
-    const cachedPosts = [{
+    const cachedPosts: OfflinePost[] = [{
       id: 9,
       teamId: 't1',
       channelId: 'c1',
       channelDisplayName: 'General',
       text: 'Offline conflict',
-      imageUrls: [] as string[],
+      imageUrls: [],
       timestamp: Date.now(),
       mentions: [],
       subFolder: ''

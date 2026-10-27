@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { act } from 'react';
 import '@testing-library/jest-dom';
+import { AuthError } from '@azure/msal-browser';
 
 // Components
 import { ErrorComponent } from '../ui-components/ErrorComponent';
@@ -26,13 +27,27 @@ jest.mock('../ui-components/SignInSignOutButton', () => ({
 
 describe('Small UI components', () => {
   test('ErrorComponent displays error code', () => {
-    render(<ErrorComponent error={{ errorMessage: 'x', errorCode: 'E1' } as any} />);
+    render(
+      <ErrorComponent
+        error={new AuthError('E1', 'x')}
+        login={jest.fn()}
+        acquireToken={jest.fn()}
+        result={null}
+      />
+    );
     expect(screen.getByText(/Ein Fehler ist aufgetreten/i)).toBeInTheDocument();
     expect(screen.getByText(/E1/)).toBeInTheDocument();
   });
 
   test('ErrorComponent shows unknown if undefined', () => {
-    render(<ErrorComponent error={undefined as any} />);
+    render(
+      <ErrorComponent
+        error={undefined}
+        login={jest.fn()}
+        acquireToken={jest.fn()}
+        result={null}
+      />
+    );
     expect(screen.getByText(/Unbekannter Fehler/i)).toBeInTheDocument();
   });
 

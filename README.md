@@ -14,7 +14,7 @@ Eine moderne, responsive Web-App zur einfachen Erstellung von Posts in Microsoft
 * Mobile-Unterstützung: MSAL verwendet Redirect für bessere Kompatibilität auf Mobilgeräten.
 
 ## Technologien
-* Frontend: React 19.2.1, TypeScript 4.9.4, Material-UI (MUI) — `@mui/material` 5.10.17, `@mui/icons-material` 5.10.16, `@emotion/react` & `@emotion/styled` 11.10.5
+* Frontend: React 19.2.1, TypeScript 5.9.3, Material-UI (MUI) — `@mui/material` 5.10.17, `@mui/icons-material` 5.10.16, `@emotion/react` & `@emotion/styled` 11.10.5
 * Authentifizierung: Microsoft Authentication Library (MSAL) — `@azure/msal-browser` 4.0.0, `@azure/msal-react` 3.0.0
 * API: Microsoft Graph API für Teams, Kanäle, Mitglieder und OneDrive
 * Offline-Speicherung: Dexie 4.2.1 (IndexedDB)
@@ -81,6 +81,16 @@ Die Pipeline installiert Abhängigkeiten mit `npm ci`. Nach Änderungen an `pack
 mit `npm install --package-lock-only --ignore-scripts` die Lockdatei aktualisieren und
 `package.json` sowie `package-lock.json` gemeinsam einchecken. Vor dem Push mit
 `npm ci` unter Node.js 22.x prüfen.
+
+`react-scripts` bleibt auf Version `5.0.1` fixiert; `workbox-cli` verwendet Version 7
+passend zur Service-Worker-Konfiguration. Kein `npm audit fix --force` ausführen:
+Dadurch können inkompatible Build-Tools installiert werden, etwa das leere
+`react-scripts@0.0.0` ohne Build-Befehl. Sicherheitsupdates gezielt einspielen und
+anschließend `npm ci`, `npm run test:ci` und `npm run build` prüfen.
+
+Die aktuellen i18next-Typen benötigen TypeScript 5. Der npm-Override für
+`react-scripts` verwendet deshalb dieselbe TypeScript-Version wie die App,
+obwohl Create React App noch TypeScript 4 als Peer-Abhängigkeit deklariert.
 
 **GitHub Pages (alternativ)**
 
