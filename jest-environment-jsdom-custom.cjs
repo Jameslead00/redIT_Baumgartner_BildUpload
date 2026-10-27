@@ -1,5 +1,5 @@
 // jest-environment-jsdom-custom.cjs
-const JsdomEnvironment = require('jest-environment-jsdom');
+const { TestEnvironment: JsdomEnvironment } = require('jest-environment-jsdom');
 
 class JsdomCustomEnvironment extends JsdomEnvironment {
   constructor(config, options) {
