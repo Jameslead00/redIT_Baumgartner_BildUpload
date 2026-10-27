@@ -489,6 +489,8 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const isOnline = navigator.onLine;
+    // Parent passes a fresh array each render; key by content so typing elsewhere doesn't reset/refetch the list.
+    const cachedSubFoldersKey = cachedSubFolders.map(f => f.id).join('|');
 
     // NEW: Fetch Subfolders when Channel changes
     useEffect(() => {
@@ -550,7 +552,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
         };
 
         fetchSubFolders();
-    }, [team.id, channel.displayName, account, isOnline, instance, cachedSubFolders]); // Add cachedSubFolders to deps
+    }, [team.id, channel.displayName, account, isOnline, instance, cachedSubFoldersKey]);
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files && event.target.files.length > 0) {
