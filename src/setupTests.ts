@@ -1,5 +1,6 @@
 // src/setupTests.ts
 import '@testing-library/jest-dom';
+import { TextEncoder as NodeTextEncoder } from 'util';
 
 // Initialize i18n for tests with German as default language
 import i18n from 'i18next';
@@ -22,12 +23,13 @@ if (!(global as any).fetch) {
   (global as any).fetch = jest.fn();
 }
 
+if (typeof globalThis.TextEncoder === 'undefined') {
+  globalThis.TextEncoder = NodeTextEncoder;
+}
+
 // Mock URL.createObjectURL
-if (!(global as any).URL?.createObjectURL) {
-  (global as any).URL = {
-    ...(global as any).URL,
-    createObjectURL: jest.fn(() => 'blob:mock'),
-  };
+if (!global.URL.createObjectURL) {
+  global.URL.createObjectURL = jest.fn(() => 'blob:mock');
 }
 
 // Simple Image Mock – triggers onload
